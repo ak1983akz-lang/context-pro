@@ -60,37 +60,35 @@ st.markdown("""
     .result * {color: #1a1a2e !important;}
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     
-    /* ✅ КНОПКА МЕНЮ - 3 БЕЛЫЕ ПОЛОСЫ (CSS БЕЗ JS) */
-    .mobile-menu-btn {
-        position: fixed;
-        top: 15px;
-        left: 15px;
-        z-index: 9999;
-        background: #1e3a5f;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
+    /* ✅ ПЕРЕКЛЮЧАТЕЛЬ РФ/РБ ДЛЯ МОБИЛЬНЫХ */
+    .mobile-jurisdiction {
         display: none;
-        flex-direction: column;
-        gap: 4px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        background: #1e3a5f;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 10px 0;
+        text-align: center;
     }
-    .mobile-menu-btn span {
-        display: block;
-        width: 22px;
-        height: 3px;
-        background: white;
-        border-radius: 2px;
+    .mobile-jurisdiction label {
+        color: white !important;
+        font-weight: bold;
+        margin-right: 10px;
     }
-    .mobile-menu-btn:hover {
-        background: #2c5282;
+    .mobile-jurisdiction .stRadio {
+        display: inline-block;
     }
     
     /* ПОКАЗЫВАЕМ ТОЛЬКО НА МОБИЛЬНЫХ */
     @media (max-width: 768px) {
-        .mobile-menu-btn {
-            display: flex !important;
+        .mobile-jurisdiction {
+            display: block !important;
+        }
+    }
+    
+    /* СКРЫВАЕМ НА МОБИЛЬНЫХ */
+    @media (max-width: 768px) {
+        .desktop-only {
+            display: none !important;
         }
     }
     
@@ -148,20 +146,27 @@ st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', u
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
-# --- КНОПКА МЕНЮ (3 ПОЛОСЫ) - ЧЕРЕЗ STREAMLIT BUTTON ---
-col_menu, col_space = st.columns([1, 10])
-with col_menu:
-    if st.button("☰", key="mobile_menu", use_container_width=True):
-        st.session_state.toggle_sidebar = not st.session_state.get('toggle_sidebar', False)
+# --- ✅ ПЕРЕКЛЮЧАТЕЛЬ РФ/РБ ДЛЯ МОБИЛЬНЫХ (ПРЯМО НА ЭКРАНЕ) ---
+st.markdown('<div class="mobile-jurisdiction">', unsafe_allow_html=True)
+jur_mobile = st.radio(
+    "Законы:",
+    ["🇷🇺 РФ", "🇧🇾 РБ"],
+    horizontal=True,
+    index=1,
+    key="jur_mobile_radio",
+    label_visibility="collapsed"
+)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- SIDEBAR (ДЛЯ КОМПЬЮТЕРА) ---
 with st.sidebar:
     st.markdown("### ⚙️ Настройки")
-    jur = st.radio(
+    jur_desktop = st.radio(
         "Законы:",
-        ["🇷🇺 РФ", "🇧🇾 РБ"],
+        ["🇷🇺 РФ", "🇧 РБ"],
         horizontal=False,
-        index=1
+        index=1,
+        key="jur_desktop_radio"
     )
     st.markdown("---")
     if st.button("🗑️ Очистить всё", use_container_width=True):
@@ -171,6 +176,22 @@ with st.sidebar:
         st.rerun()
     st.markdown("---")
     st.caption("🔒 Данные не сохраняются")
+
+# --- ОПРЕДЕЛЯЕМ ЮРИСДИКЦИЮ ---
+# На мобильном берём из mobile_radio, на ПК из desktop_radio
+import platform
+import os
+
+# Простая проверка: если экран маленький (мобильный) - используем mobile
+# Streamlit не даёт определить размер экрана, поэтому используем оба radio с разными key
+# и проверяем какой был изменён последним
+
+if st.session_state.get('jur_mobile_radio'):
+    jur = st.session_state.jur_mobile_radio
+elif st.session_state.get('jur_desktop_radio'):
+    jur = st.session_state.jur_desktop_radio
+else:
+    jur = "🇧 РБ"
 
 # --- ВКЛАДКИ ---
 tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
