@@ -5,7 +5,7 @@ st.set_page_config(
     page_title="Context.Pro", 
     page_icon="⚖️", 
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # --- ИНИЦИАЛИЗАЦИЯ SESSION STATE ---
@@ -16,15 +16,12 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН ---
+# --- ДИЗАЙН (БЕЗ ВЕСОВ) ---
 st.markdown("""
 <style>
-    /* УБИРАЕМ ВСЕ ЛИШНИЕ ЭЛЕМЕНТЫ STREAMLIT */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     .stDeployButton {display: none;}
-    .stApp > header {display: none !important;}
     
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -54,19 +51,15 @@ st.markdown("""
         color: #1a1a2e !important;
     }
     .result * {color: #1a1a2e !important;}
-    .stSpinner > div {border: none !important;}
-    .stSpinner::before {
-        content: "⚖️";
-        font-size: 2.5rem;
-        display: block;
-        text-align: center;
-        animation: balance 2s ease-in-out infinite;
-    }
-    @keyframes balance {
-        0%, 100% { transform: rotate(-5deg); }
-        50% { transform: rotate(5deg); }
-    }
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
+    
+    section[data-testid="stSidebar"] {
+        background: #1a1a2e;
+        color: white;
+    }
+    section[data-testid="stSidebar"] * {
+        color: white !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,15 +101,20 @@ def query(sys_prompt, user_text):
     except Exception as e:
         return None, f"❌ {e}"
 
-# --- HEADER С ФЛАГАМИ ---
-st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
+# --- HEADER ---
+st.markdown('<div class="flags">🇷 &nbsp; ⚖️ &nbsp; 🇧</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("### ⚙️")
-    jur = st.radio("Законы:", ["РФ", "РБ"], horizontal=True, index=1)
+    st.markdown("### ⚙️ Настройки")
+    jur = st.radio(
+        "Законы:",
+        ["🇷🇺 РФ", "🇧🇾 РБ"],
+        horizontal=False,
+        index=1
+    )
     st.markdown("---")
     if st.button("🗑️ Очистить всё", use_container_width=True):
         st.session_state.contract_txt = ""
@@ -145,7 +143,7 @@ with tab1:
         if not txt.strip():
             st.warning("⚠️ Введите текст договора")
         else:
-            with st.spinner(""):
+            with st.spinner("Анализ..."):
                 sys = f"Ты юрист ({jur}). Найди риски, статьи законов, как исправить. Кратко."
                 res, err = query(sys, txt)
                 if err:
@@ -176,7 +174,7 @@ with tab2:
         if not q.strip():
             st.warning("⚠️ Введите вопрос")
         else:
-            with st.spinner(""):
+            with st.spinner("Готовлю ответ..."):
                 sys = f"Ты юрист ({jur}). Ответь со статьями законов. Пошагово. Кратко."
                 res, err = query(sys, q)
                 if err:
