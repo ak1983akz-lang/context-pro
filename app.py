@@ -19,11 +19,13 @@ if 'result' not in st.session_state:
 # --- ДИЗАЙН ---
 st.markdown("""
 <style>
-    /* СКРЫВАЕМ ТОЛЬКО ЛИШНИЕ ЭЛЕМЕНТЫ, ОСТАВЛЯЕМ МЕНЮ ДЛЯ ТЕЛЕФОНА */
+    /* СКРЫВАЕМ ВЕРХНЮЮ ПАНЕЛЬ С БЕГУЩИМ ЧЕЛОВЕКОМ */
+    .stApp > header {display: none !important;}
+    header {display: none !important;}
     #MainMenu {visibility: hidden !important;}
     .stDeployButton {display: none !important;}
     
-    /* СКРЫВАЕМ НИЖНЮЮ НАДПИСЬ STREAMLIT */
+    /* СКРЫВАЕМ НИЖНЮЮ НАДПИСЬ */
     footer {visibility: hidden !important;}
     .stApp > footer {display: none !important;}
     div[data-testid="stDecoration"] {display: none !important;}
@@ -58,10 +60,10 @@ st.markdown("""
     .result * {color: #1a1a2e !important;}
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     
-    /* ОСТАВЛЯЕМ КНОПКУ МЕНЮ ДЛЯ ТЕЛЕФОНА */
-    header {visibility: visible !important;}
-    .stApp > header {visibility: visible !important;}
-    header .stToolbar {visibility: hidden !important;}
+    /* КНОПКА МЕНЮ ДЛЯ ТЕЛЕФОНА */
+    button[data-testid="stSidebarCollapseButton"] {
+        display: block !important;
+    }
     
     section[data-testid="stSidebar"] {
         background: #1a1a2e;
