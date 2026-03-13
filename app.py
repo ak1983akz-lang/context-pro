@@ -5,7 +5,7 @@ st.set_page_config(
     page_title="Context.Pro", 
     page_icon="⚖️", 
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="auto"  # ✅ АВТО: на ПК открыт, на телефоне закрыт
 )
 
 # --- ИНИЦИАЛИЗАЦИЯ SESSION STATE ---
@@ -16,16 +16,16 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН С МЕНЮ ДЛЯ МОБИЛЬНЫХ ---
+# --- ДИЗАЙН С РАБОЧИМ МЕНЮ ДЛЯ МОБИЛЬНЫХ ---
 st.markdown("""
 <style>
-    /* СКРЫВАЕМ ВЕРХНЮЮ ПАНЕЛЬ STREAMLIT */
+    /* ПОЛНОСТЬЮ СКРЫВАЕМ ВЕРХНЮЮ ПАНЕЛЬ STREAMLIT */
     .stApp > header {display: none !important;}
     header {display: none !important;}
     #MainMenu {visibility: hidden !important;}
     .stDeployButton {display: none !important;}
     
-    /* СКРЫВАЕМ НИЖНЮЮ НАДПИСЬ */
+    /* СКРЫВАЕМ НИЖНЮЮ НАДПИСЬ И КОРОНУ */
     footer {visibility: hidden !important;}
     .stApp > footer {display: none !important;}
     div[data-testid="stDecoration"] {display: none !important;}
@@ -60,41 +60,29 @@ st.markdown("""
     .result * {color: #1a1a2e !important;}
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     
-    /* ✅ КНОПКА МЕНЮ (ТРИ ПОЛОСКИ) ДЛЯ МОБИЛЬНЫХ */
-    button[data-testid="stSidebarCollapseButton"] {
-        display: flex !important;
-        visibility: visible !important;
-        position: fixed !important;
-        top: 10px !important;
-        left: 10px !important;
-        z-index: 9999 !important;
-        background: #1e3a5f !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 8px 12px !important;
-        cursor: pointer !important;
-        font-size: 20px !important;
-    }
-    button[data-testid="stSidebarCollapseButton"]:hover {
-        background: #2c5282 !important;
-    }
-    
-    /* Сайдбар */
-    section[data-testid="stSidebar"] {
+    /* ✅ КНОПКА МЕНЮ (ТРИ ПОЛОСКИ) ДЛЯ МОБИЛЬНЫХ — РАБОЧАЯ */
+    .stApp [data-testid="stSidebar"] {
         background: #1a1a2e;
         color: white;
     }
-    section[data-testid="stSidebar"] * {
+    .stApp [data-testid="stSidebar"] * {
         color: white !important;
     }
     
-    /* Адаптация для мобильных */
+    /* КНОПКА ОТКРЫТИЯ САЙДБАРА */
+    button[title="View fullscreen"] {
+        display: none !important;
+    }
+    
+    /* НА МОБИЛЬНЫХ ПОКАЗЫВАЕМ КНОПКУ МЕНЮ */
     @media (max-width: 768px) {
-        .title {font-size: 1.4rem;}
-        .flags {font-size: 2rem;}
-        button[data-testid="stSidebarCollapseButton"] {
+        .stApp > div:first-child {
+            position: relative;
+        }
+        /* Принудительно показываем кнопку открытия сайдбара */
+        .stApp > div > div > div > button {
             display: flex !important;
+            visibility: visible !important;
         }
     }
 </style>
@@ -138,8 +126,8 @@ def query(sys_prompt, user_text):
     except Exception as e:
         return None, f"❌ {e}"
 
-# --- HEADER ---
-st.markdown('<div class="flags">🇷 &nbsp; ⚖️ &nbsp; 🇧</div>', unsafe_allow_html=True)
+# --- HEADER С ФЛАГАМИ (✅ ПРАВИЛЬНЫЕ ЭМОДЗИ) ---
+st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
