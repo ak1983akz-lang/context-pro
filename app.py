@@ -16,7 +16,7 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН С ВЕСАМИ ПРАВОСУДИЯ ---
+# --- ДИЗАЙН ---
 st.markdown("""
 <style>
     .main {
@@ -47,11 +47,8 @@ st.markdown("""
         color: #1a1a2e !important;
     }
     .result * {color: #1a1a2e !important;}
-    
-    /* ⚖️ ВЕСЫ ПРАВОСУДИЯ ВМЕСТО СПИННЕРА */
     .stSpinner > div {
         border: none !important;
-        border-top: none !important;
     }
     .stSpinner::before {
         content: "⚖️";
@@ -61,10 +58,9 @@ st.markdown("""
         animation: balance 2s ease-in-out infinite;
     }
     @keyframes balance {
-        0%, 100% { transform: rotate(-5deg); opacity: 1; }
-        50% { transform: rotate(5deg); opacity: 0.8; }
+        0%, 100% { transform: rotate(-5deg); }
+        50% { transform: rotate(5deg); }
     }
-    
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -105,12 +101,12 @@ def query(sys_prompt, user_text):
         data = r.json()
         if "choices" not in data or not data["choices"]:
             return None, "❌ Пустой ответ"
-        return data["choices"][0]["message']['content'], None
+        return data["choices"][0]["message"]["content"], None
     except Exception as e:
         return None, f"❌ {e}"
 
 # --- HEADER ---
-st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
+st.markdown('<div class="flags">🇷 &nbsp; ️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
@@ -147,7 +143,7 @@ with tab1:
             st.warning("⚠️ Введите текст договора")
         else:
             with st.spinner(""):
-                sys = f"Ты юрист ({jur}). Найди риски 🔴🟡, статьи законов, как исправить. Кратко."
+                sys = f"Ты юрист ({jur}). Найди риски, статьи законов, как исправить. Кратко."
                 res, err = query(sys, txt)
                 if err:
                     st.error(err)
