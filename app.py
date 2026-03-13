@@ -8,7 +8,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- ИНИЦИАЛИЗАЦИЯ SESSION STATE (важно!) ---
+# --- ИНИЦИАЛИЗАЦИЯ SESSION STATE ---
 if 'contract_txt' not in st.session_state:
     st.session_state.contract_txt = ""
 if 'question_txt' not in st.session_state:
@@ -16,7 +16,7 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН ---
+# --- ДИЗАЙН С ВЕСАМИ ПРАВОСУДИЯ ---
 st.markdown("""
 <style>
     .main {
@@ -47,6 +47,24 @@ st.markdown("""
         color: #1a1a2e !important;
     }
     .result * {color: #1a1a2e !important;}
+    
+    /* ⚖️ ВЕСЫ ПРАВОСУДИЯ ВМЕСТО СПИННЕРА */
+    .stSpinner > div {
+        border: none !important;
+        border-top: none !important;
+    }
+    .stSpinner::before {
+        content: "⚖️";
+        font-size: 2.5rem;
+        display: block;
+        text-align: center;
+        animation: balance 2s ease-in-out infinite;
+    }
+    @keyframes balance {
+        0%, 100% { transform: rotate(-5deg); opacity: 1; }
+        50% { transform: rotate(5deg); opacity: 0.8; }
+    }
+    
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -87,7 +105,7 @@ def query(sys_prompt, user_text):
         data = r.json()
         if "choices" not in data or not data["choices"]:
             return None, "❌ Пустой ответ"
-        return data["choices"][0]["message"]["content"], None
+        return data["choices"][0]["message']['content'], None
     except Exception as e:
         return None, f"❌ {e}"
 
@@ -102,7 +120,6 @@ with st.sidebar:
     jur = st.radio("Законы:", ["РФ", "РБ"], horizontal=True, index=1)
     st.markdown("---")
     if st.button("🗑️ Очистить всё", use_container_width=True):
-        # ✅ БЕЗОПАСНАЯ ОЧИСТКА
         st.session_state.contract_txt = ""
         st.session_state.question_txt = ""
         st.session_state.result = ""
@@ -111,7 +128,7 @@ with st.sidebar:
     st.caption("🔒 Данные не сохраняются")
 
 # --- ВКЛАДКИ ---
-tab1, tab2 = st.tabs(["🔍 Договор", "⚡ Вопрос"])
+tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
 
 # --- ТАБ 1 ---
 with tab1:
@@ -123,14 +140,13 @@ with tab1:
         key="contract_input",
         placeholder="Скопируйте сюда текст договора..."
     )
-    # Сохраняем в session state
     st.session_state.contract_txt = txt
     
-    if st.button("🔍 Проверить договор", use_container_width=True):
+    if st.button("⚖️ Проверить договор", use_container_width=True):
         if not txt.strip():
             st.warning("⚠️ Введите текст договора")
         else:
-            with st.spinner("🤖 Анализирую..."):
+            with st.spinner(""):
                 sys = f"Ты юрист ({jur}). Найди риски 🔴🟡, статьи законов, как исправить. Кратко."
                 res, err = query(sys, txt)
                 if err:
@@ -155,14 +171,13 @@ with tab2:
         key="question_input",
         placeholder="Например: Что делать если заказчик не платит?"
     )
-    # Сохраняем в session state
     st.session_state.question_txt = q
     
     if st.button("⚡ Получить ответ", use_container_width=True):
         if not q.strip():
             st.warning("⚠️ Введите вопрос")
         else:
-            with st.spinner("🤖 Готовлю ответ..."):
+            with st.spinner(""):
                 sys = f"Ты юрист ({jur}). Ответь со статьями законов. Пошагово. Кратко."
                 res, err = query(sys, q)
                 if err:
