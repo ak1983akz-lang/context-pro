@@ -16,12 +16,16 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН (БЕЗ ВЕСОВ) ---
+# --- ДИЗАЙН (СКРЫВАЕМ ВЕСЬ ВЕРХ STREAMLIT) ---
 st.markdown("""
 <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stDeployButton {display: none;}
+    /* ПОЛНОСТЬЮ СКРЫВАЕМ ВЕРХНЮЮ ПАНЕЛЬ STREAMLIT */
+    header {display: none !important;}
+    .stApp > header {display: none !important;}
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+    .stDeployButton {display: none !important;}
+    .stSpinner {display: none !important;}
     
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -102,7 +106,7 @@ def query(sys_prompt, user_text):
         return None, f"❌ {e}"
 
 # --- HEADER ---
-st.markdown('<div class="flags">🇷 &nbsp; ⚖️ &nbsp; 🇧</div>', unsafe_allow_html=True)
+st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
