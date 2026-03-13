@@ -8,46 +8,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- УЛУЧШЕННЫЙ ДИЗАЙН (с мобильной адаптацией) ---
+# --- ИНИЦИАЛИЗАЦИЯ SESSION STATE (важно!) ---
+if 'contract_txt' not in st.session_state:
+    st.session_state.contract_txt = ""
+if 'question_txt' not in st.session_state:
+    st.session_state.question_txt = ""
+if 'result' not in st.session_state:
+    st.session_state.result = ""
+
+# --- ДИЗАЙН ---
 st.markdown("""
 <style>
-    /* Основной фон */
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
         padding: 10px;
     }
-    
-    /* Заголовок */
-    .flags {
-        font-size: 2.5rem; 
-        text-align: center;
-        margin: 10px 0;
-    }
-    .title {
-        font-size: 1.6rem; 
-        font-weight: bold; 
-        color: #1a1a2e; 
-        text-align: center;
-        margin-bottom: 5px;
-    }
-    .subtitle {
-        text-align: center;
-        color: #555;
-        font-size: 0.9rem;
-        margin-bottom: 20px;
-        padding: 0 10px;
-    }
-    
-    /* Поля ввода — адаптивные */
-    .stTextArea {
-        margin: 10px 0;
-    }
-    .stTextArea textarea {
-        font-size: 16px !important;  /* Чтобы не зумило на iPhone */
-        min-height: 200px;
-    }
-    
-    /* Кнопки — большие для пальца */
+    .flags {font-size: 2.5rem; text-align: center; margin: 10px 0;}
+    .title {font-size: 1.6rem; font-weight: bold; color: #1a1a2e; text-align: center;}
+    .subtitle {text-align: center; color: #555; font-size: 0.9rem; margin-bottom: 20px;}
+    .stTextArea textarea {font-size: 16px !important;}
     .stButton button {
         background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
         color: white !important;
@@ -57,16 +36,7 @@ st.markdown("""
         font-weight: bold;
         font-size: 16px;
         width: 100%;
-        cursor: pointer;
-        transition: all 0.3s;
     }
-    .stButton button:hover {
-        background: linear-gradient(135deg, #2c5282 0%, #1e3a5f 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(30, 58, 95, 0.3);
-    }
-    
-    /* Результат — ЧЁТКИЙ КОНТРАСТ */
     .result {
         background: white;
         padding: 20px;
@@ -75,83 +45,9 @@ st.markdown("""
         margin: 20px 0;
         box-shadow: 0 3px 10px rgba(0,0,0,0.15);
         color: #1a1a2e !important;
-        font-size: 15px;
-        line-height: 1.6;
     }
-    .result * {
-        color: #1a1a2e !important;
-    }
-    .result h1, .result h2, .result h3 {
-        color: #1e3a5f !important;
-        margin-top: 15px;
-    }
-    .result p {
-        color: #2d3748 !important;
-        margin: 10px 0;
-    }
-    .result ul, .result ol {
-        color: #2d3748 !important;
-        padding-left: 20px;
-    }
-    .result strong {
-        color: #1e3a5f !important;
-    }
-    
-    /* Риски */
-    .risk-high {
-        background: #fff0f0;
-        border-left: 4px solid #e53e3e;
-        padding: 12px;
-        border-radius: 8px;
-        margin: 10px 0;
-        color: #742a2a !important;
-    }
-    .risk-med {
-        background: #fffaf0;
-        border-left: 4px solid #ed8936;
-        padding: 12px;
-        border-radius: 8px;
-        margin: 10px 0;
-        color: #744210 !important;
-    }
-    
-    /* Сайдбар */
-    .sidebar-content {
-        background: #1a1a2e;
-        color: white;
-    }
-    
-    /* Футер */
-    .footer {
-        text-align: center;
-        color: #666;
-        font-size: 0.75rem;
-        padding: 20px 10px;
-        border-top: 1px solid #ddd;
-        margin-top: 30px;
-    }
-    
-    /* Мобильная адаптация */
-    @media (max-width: 768px) {
-        .main {
-            padding: 5px;
-        }
-        .title {
-            font-size: 1.4rem;
-        }
-        .flags {
-            font-size: 2rem;
-        }
-        .stTextArea textarea {
-            font-size: 16px !important;
-        }
-        .result {
-            padding: 15px;
-            font-size: 14px;
-        }
-    }
-    
-    /* Скрываем меню Streamlit */
+    .result * {color: #1a1a2e !important;}
+    .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
@@ -202,12 +98,14 @@ st.markdown('<div class="subtitle">Анализ договоров • Конс�
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("### ⚙️ Настройки")
+    st.markdown("### ⚙️")
     jur = st.radio("Законы:", ["РФ", "РБ"], horizontal=True, index=1)
     st.markdown("---")
     if st.button("🗑️ Очистить всё", use_container_width=True):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
+        # ✅ БЕЗОПАСНАЯ ОЧИСТКА
+        st.session_state.contract_txt = ""
+        st.session_state.question_txt = ""
+        st.session_state.result = ""
         st.rerun()
     st.markdown("---")
     st.caption("🔒 Данные не сохраняются")
@@ -215,15 +113,19 @@ with st.sidebar:
 # --- ВКЛАДКИ ---
 tab1, tab2 = st.tabs(["🔍 Договор", "⚡ Вопрос"])
 
-# --- ТАБ 1: ДОГОВОР ---
+# --- ТАБ 1 ---
 with tab1:
     st.markdown("#### 📄 Текст договора")
     txt = st.text_area(
         "Вставьте текст договора:",
+        value=st.session_state.contract_txt,
         height=200,
-        key="contract_txt",
+        key="contract_input",
         placeholder="Скопируйте сюда текст договора..."
     )
+    # Сохраняем в session state
+    st.session_state.contract_txt = txt
+    
     if st.button("🔍 Проверить договор", use_container_width=True):
         if not txt.strip():
             st.warning("⚠️ Введите текст договора")
@@ -234,28 +136,28 @@ with tab1:
                 if err:
                     st.error(err)
                 else:
-                    # ✅ ИСПОЛЬЗУЕМ st.markdown С ПРАВИЛЬНЫМ ОТОБРАЖЕНИЕМ
+                    st.session_state.result = res
                     st.markdown(f'<div class="result">{res}</div>', unsafe_allow_html=True)
-                    st.download_button(
-                        "📥 Скачать результат",
-                        res,
-                        "result.txt",
-                        "text/plain",
-                        use_container_width=True
-                    )
-    if st.button("🗑️ Очистить поле", key="clear_c"):
+                    st.download_button("📥 Скачать", res, "result.txt", "text/plain", use_container_width=True)
+    
+    if st.button("🗑️ Очистить поле", key="clear_contract"):
         st.session_state.contract_txt = ""
+        st.session_state.result = ""
         st.rerun()
 
-# --- ТАБ 2: ВОПРОС ---
+# --- ТАБ 2 ---
 with tab2:
     st.markdown("#### ⚖️ Ваш вопрос")
     q = st.text_area(
         "Задайте вопрос юристу:",
+        value=st.session_state.question_txt,
         height=180,
-        key="question_txt",
+        key="question_input",
         placeholder="Например: Что делать если заказчик не платит?"
     )
+    # Сохраняем в session state
+    st.session_state.question_txt = q
+    
     if st.button("⚡ Получить ответ", use_container_width=True):
         if not q.strip():
             st.warning("⚠️ Введите вопрос")
@@ -266,10 +168,12 @@ with tab2:
                 if err:
                     st.error(err)
                 else:
-                    # ✅ ИСПОЛЬЗУЕМ st.markdown С ПРАВИЛЬНЫМ ОТОБРАЖЕНИЕМ
+                    st.session_state.result = res
                     st.markdown(f'<div class="result">{res}</div>', unsafe_allow_html=True)
-    if st.button("🗑️ Очистить поле", key="clear_q"):
+    
+    if st.button("🗑️ Очистить поле", key="clear_question"):
         st.session_state.question_txt = ""
+        st.session_state.result = ""
         st.rerun()
 
 # --- FOOTER ---
