@@ -1,29 +1,176 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="Context.Pro", page_icon="⚖️", layout="centered")
+st.set_page_config(
+    page_title="Context.Pro", 
+    page_icon="⚖️", 
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
+# --- УЛУЧШЕННЫЙ ДИЗАЙН (с мобильной адаптацией) ---
 st.markdown("""
 <style>
+    /* Основной фон */
+    .main {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+        padding: 10px;
+    }
+    
+    /* Заголовок */
+    .flags {
+        font-size: 2.5rem; 
+        text-align: center;
+        margin: 10px 0;
+    }
+    .title {
+        font-size: 1.6rem; 
+        font-weight: bold; 
+        color: #1a1a2e; 
+        text-align: center;
+        margin-bottom: 5px;
+    }
+    .subtitle {
+        text-align: center;
+        color: #555;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+        padding: 0 10px;
+    }
+    
+    /* Поля ввода — адаптивные */
+    .stTextArea {
+        margin: 10px 0;
+    }
+    .stTextArea textarea {
+        font-size: 16px !important;  /* Чтобы не зумило на iPhone */
+        min-height: 200px;
+    }
+    
+    /* Кнопки — большие для пальца */
+    .stButton button {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+        color: white !important;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 16px;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .stButton button:hover {
+        background: linear-gradient(135deg, #2c5282 0%, #1e3a5f 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(30, 58, 95, 0.3);
+    }
+    
+    /* Результат — ЧЁТКИЙ КОНТРАСТ */
+    .result {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 5px solid #1e3a5f;
+        margin: 20px 0;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+        color: #1a1a2e !important;
+        font-size: 15px;
+        line-height: 1.6;
+    }
+    .result * {
+        color: #1a1a2e !important;
+    }
+    .result h1, .result h2, .result h3 {
+        color: #1e3a5f !important;
+        margin-top: 15px;
+    }
+    .result p {
+        color: #2d3748 !important;
+        margin: 10px 0;
+    }
+    .result ul, .result ol {
+        color: #2d3748 !important;
+        padding-left: 20px;
+    }
+    .result strong {
+        color: #1e3a5f !important;
+    }
+    
+    /* Риски */
+    .risk-high {
+        background: #fff0f0;
+        border-left: 4px solid #e53e3e;
+        padding: 12px;
+        border-radius: 8px;
+        margin: 10px 0;
+        color: #742a2a !important;
+    }
+    .risk-med {
+        background: #fffaf0;
+        border-left: 4px solid #ed8936;
+        padding: 12px;
+        border-radius: 8px;
+        margin: 10px 0;
+        color: #744210 !important;
+    }
+    
+    /* Сайдбар */
+    .sidebar-content {
+        background: #1a1a2e;
+        color: white;
+    }
+    
+    /* Футер */
+    .footer {
+        text-align: center;
+        color: #666;
+        font-size: 0.75rem;
+        padding: 20px 10px;
+        border-top: 1px solid #ddd;
+        margin-top: 30px;
+    }
+    
+    /* Мобильная адаптация */
+    @media (max-width: 768px) {
+        .main {
+            padding: 5px;
+        }
+        .title {
+            font-size: 1.4rem;
+        }
+        .flags {
+            font-size: 2rem;
+        }
+        .stTextArea textarea {
+            font-size: 16px !important;
+        }
+        .result {
+            padding: 15px;
+            font-size: 14px;
+        }
+    }
+    
+    /* Скрываем меню Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stSpinner > div {border-color: #1e3a5f !important;}
 </style>
 """, unsafe_allow_html=True)
 
+# --- КЛЮЧ ---
 def get_key():
     try:
         if "openrouter" in st.secrets:
             return st.secrets["openrouter"]["api_key"]
     except:
         pass
-    return st.sidebar.text_input("🔑 API Key:", type="password")
+    return None
 
+# --- ЗАПРОС К ИИ ---
 def query(sys_prompt, user_text):
     key = get_key()
     if not key:
-        return None, "❌ Введи ключ слева"
+        return None, "❌ API ключ не настроен"
     try:
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -48,83 +195,82 @@ def query(sys_prompt, user_text):
     except Exception as e:
         return None, f"❌ {e}"
 
-st.markdown("""
-<div style='text-align: center; padding: 20px 0;'>
-    <div style='font-size: 3rem;'>🇷🇺  ⚖️  🇧🇾</div>
-    <div style='font-size: 2rem; font-weight: bold; color: #1e3a5f;'>Context.Pro Legal</div>
-    <div style='color: #666;'>Профессиональный анализ договоров</div>
-</div>
-""", unsafe_allow_html=True)
+# --- HEADER ---
+st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
+st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("### ⚙️ Настройки")
     jur = st.radio("Законы:", ["РФ", "РБ"], horizontal=True, index=1)
     st.markdown("---")
-    if st.button("🗑️ Очистить всё", key="btn_clear_all", use_container_width=True):
+    if st.button("🗑️ Очистить всё", use_container_width=True):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
     st.markdown("---")
     st.caption("🔒 Данные не сохраняются")
 
-tab1, tab2 = st.tabs(["🔍 Проверка договора", "⚡ Консультация"])
+# --- ВКЛАДКИ ---
+tab1, tab2 = st.tabs(["🔍 Договор", "⚡ Вопрос"])
 
+# --- ТАБ 1: ДОГОВОР ---
 with tab1:
-    st.markdown("#### 📄 Анализ договора")
-    txt = st.text_area("Вставьте текст договора:", height=250, key="txt_contract", 
-                       placeholder="Скопируйте текст договора для анализа...")
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        if st.button("🔍 Проверить", key="btn_check", type="primary", use_container_width=True):
-            if not txt.strip():
-                st.warning("⚠️ Введите текст договора")
-            else:
-                with st.spinner("⚖️ Анализирую договор..."):
-                    res, err = query(f"Ты юрист ({jur}). Найди риски 🔴🟡, статьи законов, как исправить. Кратко и профессионально.", txt)
-                    if err: 
-                        st.error(err)
-                    else: 
-                        st.success("✅ Готово!")
-                        st.markdown(f"<div style='background: white; padding: 20px; border-radius: 10px; border-left: 4px solid #1e3a5f; margin: 20px 0;'>{res}</div>", unsafe_allow_html=True)
-                        # 🔥 ИСПРАВЛЕНИЕ: используем bytes + UTF-8
-                        st.download_button(
-                            label="📥 Скачать результат",
-                            data=res.encode('utf-8'),
-                            file_name="analysis.txt",
-                            mime="text/plain;charset=utf-8",
-                            use_container_width=True
-                        )
-    with col2:
-        if st.button("🗑️ Очистить", key="btn_clear_1", use_container_width=True):
-            st.session_state.txt_contract = ""
-            st.rerun()
+    st.markdown("#### 📄 Текст договора")
+    txt = st.text_area(
+        "Вставьте текст договора:",
+        height=200,
+        key="contract_txt",
+        placeholder="Скопируйте сюда текст договора..."
+    )
+    if st.button("🔍 Проверить договор", use_container_width=True):
+        if not txt.strip():
+            st.warning("⚠️ Введите текст договора")
+        else:
+            with st.spinner("🤖 Анализирую..."):
+                sys = f"Ты юрист ({jur}). Найди риски 🔴🟡, статьи законов, как исправить. Кратко."
+                res, err = query(sys, txt)
+                if err:
+                    st.error(err)
+                else:
+                    # ✅ ИСПОЛЬЗУЕМ st.markdown С ПРАВИЛЬНЫМ ОТОБРАЖЕНИЕМ
+                    st.markdown(f'<div class="result">{res}</div>', unsafe_allow_html=True)
+                    st.download_button(
+                        "📥 Скачать результат",
+                        res,
+                        "result.txt",
+                        "text/plain",
+                        use_container_width=True
+                    )
+    if st.button("🗑️ Очистить поле", key="clear_c"):
+        st.session_state.contract_txt = ""
+        st.rerun()
 
+# --- ТАБ 2: ВОПРОС ---
 with tab2:
-    st.markdown("#### ⚖️ Юридическая консультация")
-    q = st.text_area("Ваш вопрос:", height=200, key="txt_question",
-                     placeholder="Опишите ситуацию или задайте вопрос...")
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        if st.button("⚡ Получить ответ", key="btn_answer", type="primary", use_container_width=True):
-            if not q.strip():
-                st.warning("⚠️ Введите вопрос")
-            else:
-                with st.spinner("⚖️ Готовлю ответ..."):
-                    res, err = query(f"Ты юрист ({jur}). Ответь со ссылками на статьи законов. Пошаговый план действий. Профессионально.", q)
-                    if err: 
-                        st.error(err)
-                    else: 
-                        st.success("✅ Ответ готов!")
-                        st.markdown(f"<div style='background: white; padding: 20px; border-radius: 10px; border-left: 4px solid #1e3a5f; margin: 20px 0;'>{res}</div>", unsafe_allow_html=True)
-    with col2:
-        if st.button("🗑️ Очистить", key="btn_clear_2", use_container_width=True):
-            st.session_state.txt_question = ""
-            st.rerun()
+    st.markdown("#### ⚖️ Ваш вопрос")
+    q = st.text_area(
+        "Задайте вопрос юристу:",
+        height=180,
+        key="question_txt",
+        placeholder="Например: Что делать если заказчик не платит?"
+    )
+    if st.button("⚡ Получить ответ", use_container_width=True):
+        if not q.strip():
+            st.warning("⚠️ Введите вопрос")
+        else:
+            with st.spinner("🤖 Готовлю ответ..."):
+                sys = f"Ты юрист ({jur}). Ответь со статьями законов. Пошагово. Кратко."
+                res, err = query(sys, q)
+                if err:
+                    st.error(err)
+                else:
+                    # ✅ ИСПОЛЬЗУЕМ st.markdown С ПРАВИЛЬНЫМ ОТОБРАЖЕНИЕМ
+                    st.markdown(f'<div class="result">{res}</div>', unsafe_allow_html=True)
+    if st.button("🗑️ Очистить поле", key="clear_q"):
+        st.session_state.question_txt = ""
+        st.rerun()
 
-st.markdown("""
-<div style='text-align: center; color: #666; padding: 30px; border-top: 1px solid #eee; margin-top: 40px;'>
-    <div>⚖️ Context.Pro Legal © 2026</div>
-    <div style='font-size: 0.8rem;'>🇷🇺 Российская Федерация • 🇧🇾 Республика Беларусь</div>
-    <div style='font-size: 0.75rem; color: #999;'>Конфиденциально • Без сохранения данных</div>
-</div>
-""", unsafe_allow_html=True)
+# --- FOOTER ---
+st.markdown('<div class="footer">⚖️ Context.Pro | 🇷🇺 РФ • 🇧🇾 РБ | Приватно • Без логов</div>', unsafe_allow_html=True)
