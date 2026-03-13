@@ -16,7 +16,7 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- КНОПКА МЕНЮ ДЛЯ ТЕЛЕФОНА (3 БЕЛЫЕ ПОЛОСЫ) ---
+# --- ДИЗАЙН ---
 st.markdown("""
 <style>
     /* СКРЫВАЕМ ВЕРХ STREAMLIT */
@@ -60,7 +60,7 @@ st.markdown("""
     .result * {color: #1a1a2e !important;}
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     
-    /* ✅ КАСТОМНАЯ КНОПКА МЕНЮ - 3 БЕЛЫЕ ПОЛОСЫ */
+    /* ✅ КНОПКА МЕНЮ - 3 БЕЛЫЕ ПОЛОСЫ (CSS БЕЗ JS) */
     .mobile-menu-btn {
         position: fixed;
         top: 15px;
@@ -87,7 +87,7 @@ st.markdown("""
         background: #2c5282;
     }
     
-    /* ПОКАЗЫВАЕМ КНОПКУ ТОЛЬКО НА МОБИЛЬНЫХ */
+    /* ПОКАЗЫВАЕМ ТОЛЬКО НА МОБИЛЬНЫХ */
     @media (max-width: 768px) {
         .mobile-menu-btn {
             display: flex !important;
@@ -103,26 +103,6 @@ st.markdown("""
         color: white !important;
     }
 </style>
-""", unsafe_allow_html=True)
-
-# --- КНОПКА МЕНЮ (3 ПОЛОСЫ) ---
-st.markdown("""
-<button class="mobile-menu-btn" onclick="document.querySelector('div[data-testid="stSidebar"]').click()">
-    <span></span>
-    <span></span>
-    <span></span>
-</button>
-<script>
-    document.querySelector('.mobile-menu-btn').addEventListener('click', function() {
-        var sidebar = document.querySelector('button[title="Close sidebar"]');
-        if (sidebar) {
-            sidebar.click();
-        } else {
-            var openBtn = document.querySelector('button[aria-label="Open sidebar"]');
-            if (openBtn) openBtn.click();
-        }
-    });
-</script>
 """, unsafe_allow_html=True)
 
 # --- КЛЮЧ ---
@@ -167,6 +147,12 @@ def query(sys_prompt, user_text):
 st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
+
+# --- КНОПКА МЕНЮ (3 ПОЛОСЫ) - ЧЕРЕЗ STREAMLIT BUTTON ---
+col_menu, col_space = st.columns([1, 10])
+with col_menu:
+    if st.button("☰", key="mobile_menu", use_container_width=True):
+        st.session_state.toggle_sidebar = not st.session_state.get('toggle_sidebar', False)
 
 # --- SIDEBAR ---
 with st.sidebar:
