@@ -16,16 +16,19 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН (СКРЫВАЕМ ВЕСЬ ВЕРХ STREAMLIT) ---
+# --- ДИЗАЙН ---
 st.markdown("""
 <style>
-    /* ПОЛНОСТЬЮ СКРЫВАЕМ ВЕРХНЮЮ ПАНЕЛЬ STREAMLIT */
+    /* СКРЫВАЕМ ВЕРХ И НИЗ STREAMLIT */
     header {display: none !important;}
     .stApp > header {display: none !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
     .stDeployButton {display: none !important;}
-    .stSpinner {display: none !important;}
+    
+    /* СКРЫВАЕМ КОРОНУ И КРУЖОК ВНИЗУ */
+    .stApp > div[data-testid="stDecoration"] {display: none !important;}
+    div[data-testid="stStatusWidget"] {display: none !important;}
     
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
