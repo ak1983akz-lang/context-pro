@@ -19,6 +19,13 @@ if 'result' not in st.session_state:
 # --- ДИЗАЙН ---
 st.markdown("""
 <style>
+    /* УБИРАЕМ ВСЕ ЛИШНИЕ ЭЛЕМЕНТЫ STREAMLIT */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display: none;}
+    .stApp > header {display: none !important;}
+    
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
         padding: 10px;
@@ -47,9 +54,7 @@ st.markdown("""
         color: #1a1a2e !important;
     }
     .result * {color: #1a1a2e !important;}
-    .stSpinner > div {
-        border: none !important;
-    }
+    .stSpinner > div {border: none !important;}
     .stSpinner::before {
         content: "⚖️";
         font-size: 2.5rem;
@@ -62,8 +67,6 @@ st.markdown("""
         50% { transform: rotate(5deg); }
     }
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -105,8 +108,8 @@ def query(sys_prompt, user_text):
     except Exception as e:
         return None, f"❌ {e}"
 
-# --- HEADER ---
-st.markdown('<div class="flags">🇷 &nbsp; ️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
+# --- HEADER С ФЛАГАМИ ---
+st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
 
