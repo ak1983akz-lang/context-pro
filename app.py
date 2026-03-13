@@ -5,7 +5,7 @@ st.set_page_config(
     page_title="Context.Pro", 
     page_icon="⚖️", 
     layout="centered",
-    initial_sidebar_state="auto"  # ✅ АВТО: на ПК открыт, на телефоне закрыт
+    initial_sidebar_state="expanded"
 )
 
 # --- ИНИЦИАЛИЗАЦИЯ SESSION STATE ---
@@ -16,16 +16,16 @@ if 'question_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 
-# --- ДИЗАЙН С РАБОЧИМ МЕНЮ ДЛЯ МОБИЛЬНЫХ ---
+# --- КНОПКА МЕНЮ ДЛЯ ТЕЛЕФОНА (3 БЕЛЫЕ ПОЛОСЫ) ---
 st.markdown("""
 <style>
-    /* ПОЛНОСТЬЮ СКРЫВАЕМ ВЕРХНЮЮ ПАНЕЛЬ STREAMLIT */
+    /* СКРЫВАЕМ ВЕРХ STREAMLIT */
     .stApp > header {display: none !important;}
     header {display: none !important;}
     #MainMenu {visibility: hidden !important;}
     .stDeployButton {display: none !important;}
     
-    /* СКРЫВАЕМ НИЖНЮЮ НАДПИСЬ И КОРОНУ */
+    /* СКРЫВАЕМ НИЗ */
     footer {visibility: hidden !important;}
     .stApp > footer {display: none !important;}
     div[data-testid="stDecoration"] {display: none !important;}
@@ -60,32 +60,69 @@ st.markdown("""
     .result * {color: #1a1a2e !important;}
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
     
-    /* ✅ КНОПКА МЕНЮ (ТРИ ПОЛОСКИ) ДЛЯ МОБИЛЬНЫХ — РАБОЧАЯ */
-    .stApp [data-testid="stSidebar"] {
+    /* ✅ КАСТОМНАЯ КНОПКА МЕНЮ - 3 БЕЛЫЕ ПОЛОСЫ */
+    .mobile-menu-btn {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        z-index: 9999;
+        background: #1e3a5f;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    .mobile-menu-btn span {
+        display: block;
+        width: 22px;
+        height: 3px;
+        background: white;
+        border-radius: 2px;
+    }
+    .mobile-menu-btn:hover {
+        background: #2c5282;
+    }
+    
+    /* ПОКАЗЫВАЕМ КНОПКУ ТОЛЬКО НА МОБИЛЬНЫХ */
+    @media (max-width: 768px) {
+        .mobile-menu-btn {
+            display: flex !important;
+        }
+    }
+    
+    /* САЙДБАР */
+    section[data-testid="stSidebar"] {
         background: #1a1a2e;
         color: white;
     }
-    .stApp [data-testid="stSidebar"] * {
+    section[data-testid="stSidebar"] * {
         color: white !important;
     }
-    
-    /* КНОПКА ОТКРЫТИЯ САЙДБАРА */
-    button[title="View fullscreen"] {
-        display: none !important;
-    }
-    
-    /* НА МОБИЛЬНЫХ ПОКАЗЫВАЕМ КНОПКУ МЕНЮ */
-    @media (max-width: 768px) {
-        .stApp > div:first-child {
-            position: relative;
-        }
-        /* Принудительно показываем кнопку открытия сайдбара */
-        .stApp > div > div > div > button {
-            display: flex !important;
-            visibility: visible !important;
-        }
-    }
 </style>
+""", unsafe_allow_html=True)
+
+# --- КНОПКА МЕНЮ (3 ПОЛОСЫ) ---
+st.markdown("""
+<button class="mobile-menu-btn" onclick="document.querySelector('div[data-testid="stSidebar"]').click()">
+    <span></span>
+    <span></span>
+    <span></span>
+</button>
+<script>
+    document.querySelector('.mobile-menu-btn').addEventListener('click', function() {
+        var sidebar = document.querySelector('button[title="Close sidebar"]');
+        if (sidebar) {
+            sidebar.click();
+        } else {
+            var openBtn = document.querySelector('button[aria-label="Open sidebar"]');
+            if (openBtn) openBtn.click();
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
 
 # --- КЛЮЧ ---
@@ -126,7 +163,7 @@ def query(sys_prompt, user_text):
     except Exception as e:
         return None, f"❌ {e}"
 
-# --- HEADER С ФЛАГАМИ (✅ ПРАВИЛЬНЫЕ ЭМОДЗИ) ---
+# --- HEADER С ФЛАГАМИ ---
 st.markdown('<div class="flags">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
 st.markdown('<div class="title">Context.Pro Legal</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Анализ договоров • Консультации • РФ/РБ</div>', unsafe_allow_html=True)
