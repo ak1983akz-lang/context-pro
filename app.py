@@ -19,16 +19,14 @@ if 'result' not in st.session_state:
 # --- ДИЗАЙН ---
 st.markdown("""
 <style>
-    /* СКРЫВАЕМ ВЕРХ И НИЗ STREAMLIT */
-    header {display: none !important;}
-    .stApp > header {display: none !important;}
+    /* СКРЫВАЕМ ТОЛЬКО ЛИШНИЕ ЭЛЕМЕНТЫ, ОСТАВЛЯЕМ МЕНЮ ДЛЯ ТЕЛЕФОНА */
     #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
     .stDeployButton {display: none !important;}
     
-    /* СКРЫВАЕМ КОРОНУ И КРУЖОК ВНИЗУ */
-    .stApp > div[data-testid="stDecoration"] {display: none !important;}
-    div[data-testid="stStatusWidget"] {display: none !important;}
+    /* СКРЫВАЕМ НИЖНЮЮ НАДПИСЬ STREAMLIT */
+    footer {visibility: hidden !important;}
+    .stApp > footer {display: none !important;}
+    div[data-testid="stDecoration"] {display: none !important;}
     
     .main {
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -59,6 +57,11 @@ st.markdown("""
     }
     .result * {color: #1a1a2e !important;}
     .footer {text-align: center; color: #666; font-size: 0.75rem; padding: 20px; border-top: 1px solid #ddd; margin-top: 30px;}
+    
+    /* ОСТАВЛЯЕМ КНОПКУ МЕНЮ ДЛЯ ТЕЛЕФОНА */
+    header {visibility: visible !important;}
+    .stApp > header {visibility: visible !important;}
+    header .stToolbar {visibility: hidden !important;}
     
     section[data-testid="stSidebar"] {
         background: #1a1a2e;
