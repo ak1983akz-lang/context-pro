@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import re
 import os
+import time
 
 st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered")
 
@@ -20,6 +21,31 @@ st.markdown("""
 .stApp { background: #0e1117; color: #fafafa; }
 .stTextArea textarea { background: #262730; color: #fafafa; }
 .stButton>button { background: #1f77b4; color: white; }
+
+/* Спинер - строгая пульсация */
+@keyframes empire-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.98); }
+}
+.empire-loading {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #D4AF37 !important;
+    font-weight: 500 !important;
+    font-size: 1.1rem !important;
+    animation: empire-pulse 2s infinite ease-in-out !important;
+    padding: 1.5rem !important;
+    margin: 1rem 0 !important;
+    background: #1a233a !important;
+    border: 1px dashed #B8962E !important;
+    border-radius: 8px !important;
+}
+.empire-loading::before {
+    content: "⚖️";
+    margin-right: 0.75rem !important;
+    font-size: 1.4rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,7 +120,6 @@ def get_api_key():
             return st.secrets["openrouter"]["api_key"]
     except:
         pass
-    # Пробуем из переменной окружения
     return os.getenv("OPENROUTER_API_KEY")
 
 # =============================================================================
@@ -144,16 +169,29 @@ def query_ai(system_prompt: str, user_text: str):
         return None, f"❌ Ошибка: {type(e).__name__}"
 
 # =============================================================================
-# UI
+# UI - ШАПКА
 # =============================================================================
 st.title("⚖️ Context.Pro Legal")
 st.caption("Анализ договоров • Консультации • РФ/РБ")
 
-# Переключатель юрисдикции
-jur = st.sidebar.radio("⚖️ Юрисдикция:", ["🇷🇺 РФ", "🇧🇾 РБ"])
+# =============================================================================
+# ЮРИСДИКЦИЯ НА ГЛАВНОЙ (вместо сайдбара)
+# =============================================================================
+st.markdown("### ⚖️ Юрисдикция")
+jur = st.radio(
+    "Выберите законодательство:",
+    ["🇷🇺 РФ", "🇧🇾 РБ"],
+    horizontal=True,
+    index=0 if st.session_state.jurisdiction == "🇷🇺 РФ" else 1,
+    key="jurisdiction_radio"
+)
 st.session_state.jurisdiction = jur
 
-# Вкладки
+st.markdown("---")
+
+# =============================================================================
+# ВКЛАДКИ
+# =============================================================================
 tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
 
 # =============================================================================
@@ -175,24 +213,7 @@ with tab1:
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        if st.button("⚖️ Проверить договор", use_container_width=True, key="btn_contract"):
-            is_valid, message = validate_input(text, "contract")
-            if not is_valid:
-                st.warning(message)
-            else:
-                st.session_state.is_analyzing = True
-                st.session_state.last_mode = "contract"
-                
-                sys_prompt = build_system_prompt(jur, "contract")
-                result, error = query_ai(sys_prompt, text)
-                
-                st.session_state.is_analyzing = False
-                
-                if error:
-                    st.error(error)
-                else:
-                    st.session_state.result = result
-                    st.success("✅ Анализ завершён!")
+        analyze_btn = st.button("⚖️ Проверить договор", use_container_width=True, key="btn_contract", disabled=st.session_state.is_analyzing)
     
     with col2:
         if st.button("🗑️", key="clear_contract"):
@@ -201,7 +222,32 @@ with tab1:
             st.session_state.last_mode = None
             st.rerun()
     
-    # Отображение результата
+    # ОБРАБОТКА АНАЛИЗА
+    if analyze_btn:
+        is_valid, message = validate_input(text, "contract")
+        if not is_valid:
+            st.warning(message)
+        else:
+            # Показываем спинер
+            st.session_state.is_analyzing = True
+            st.session_state.last_mode = "contract"
+            
+            # СПИНЕР
+            st.markdown('<div class="empire-loading">Анализирую договор по нормам ' + jur + '...</div>', unsafe_allow_html=True)
+            
+            sys_prompt = build_system_prompt(jur, "contract")
+            result, error = query_ai(sys_prompt, text)
+            
+            st.session_state.is_analyzing = False
+            
+            if error:
+                st.error(error)
+            else:
+                st.session_state.result = result
+                st.success("✅ Анализ завершён!")
+                st.rerun()
+    
+    # Показ результата
     if st.session_state.last_mode == "contract" and st.session_state.result:
         st.markdown("---")
         st.markdown("### 🔍 Результаты анализа")
@@ -235,24 +281,7 @@ with tab2:
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        if st.button("⚡ Получить ответ", use_container_width=True, key="btn_question"):
-            is_valid, message = validate_input(q, "question")
-            if not is_valid:
-                st.warning(message)
-            else:
-                st.session_state.is_analyzing = True
-                st.session_state.last_mode = "question"
-                
-                sys_prompt = build_system_prompt(jur, "question")
-                result, error = query_ai(sys_prompt, q)
-                
-                st.session_state.is_analyzing = False
-                
-                if error:
-                    st.error(error)
-                else:
-                    st.session_state.result = result
-                    st.success("✅ Ответ готов!")
+        ask_btn = st.button("⚡ Получить ответ", use_container_width=True, key="btn_question", disabled=st.session_state.is_analyzing)
     
     with col2:
         if st.button("🗑️", key="clear_question"):
@@ -261,7 +290,31 @@ with tab2:
             st.session_state.last_mode = None
             st.rerun()
     
-    # Отображение результата
+    # ОБРАБОТКА ВОПРОСА
+    if ask_btn:
+        is_valid, message = validate_input(q, "question")
+        if not is_valid:
+            st.warning(message)
+        else:
+            st.session_state.is_analyzing = True
+            st.session_state.last_mode = "question"
+            
+            # СПИНЕР
+            st.markdown('<div class="empire-loading">Готовлю консультацию по ' + jur + '...</div>', unsafe_allow_html=True)
+            
+            sys_prompt = build_system_prompt(jur, "question")
+            result, error = query_ai(sys_prompt, q)
+            
+            st.session_state.is_analyzing = False
+            
+            if error:
+                st.error(error)
+            else:
+                st.session_state.result = result
+                st.success("✅ Ответ готов!")
+                st.rerun()
+    
+    # Показ результата
     if st.session_state.last_mode == "question" and st.session_state.result:
         st.markdown("---")
         st.markdown("### 💬 Консультация")
@@ -270,13 +323,11 @@ with tab2:
 # =============================================================================
 # FOOTER
 # =============================================================================
-st.sidebar.markdown("---")
-st.sidebar.caption("🔒 Приватно • Без логов • Конфиденциально")
-
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; padding: 15px; color: #718096; font-size: 0.85rem;">
     <p>⚖️ <strong>Context.Pro Legal</strong> | 🇷🇺 РФ • 🇧🇾 РБ</p>
+    <p style="font-size: 0.75rem;">🔒 Приватно • Без логов • Конфиденциально</p>
     <p style="font-size: 0.75rem;">⚠️ ИИ-помощник не заменяет очную консультацию юриста</p>
 </div>
 """, unsafe_allow_html=True)
