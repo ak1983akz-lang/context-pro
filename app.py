@@ -1,83 +1,37 @@
 import streamlit as st
 import requests
-import re
+import os
 
-st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered")
+st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️")
 
-# Session state
-for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction']:
-    if key not in st.session_state:
-        st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False
+# API ключ
+API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# CSS
-st.markdown("""
-<style>
-.stApp { background: #0e1117; color: #fafafa; }
-.stTextArea textarea { background: #262730; color: #fafafa; }
-.stButton>button { background: #1f77b4; color: white; }
-</style>
-""", unsafe_allow_html=True)
+if 'result' not in st.session_state:
+    st.session_state.result = None
 
-# Заголовок
 st.title("⚖️ Context.Pro Legal")
-st.caption("Анализ договоров • Консультации • РФ/РБ")
 
-# Переключатель юрисдикции
-jur = st.sidebar.radio("⚖️ Юрисдикция:", ["🇷🇺 РФ", "🇧🇾 РБ"])
-st.session_state.jurisdiction = jur
+jur = st.sidebar.radio("Юрисдикция:", ["🇷🇺 РФ", "🇧 РБ"])
 
-# Вкладки
-tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
+tab1, tab2 = st.tabs(["📋 Анализ договора", "💬 Вопрос"])
 
-# Вкладка 1: Договор
 with tab1:
-    text = st.text_area("Текст договора:", height=200, key="contract_area")
-    
-    if st.button("⚖️ Проверить договор", key="btn_contract"):
-        if len(text.strip()) < 50:
-            st.error("📋 Нужно минимум 50 символов")
+    text = st.text_area("Текст договора:", height=250)
+    if st.button("Проверить договор"):
+        if len(text) < 50:
+            st.warning("Минимум 50 символов")
         else:
             with st.spinner("Анализирую..."):
                 # Здесь вызов AI
-                st.session_state.result = "✅ Анализ завершён"
-                st.session_state.last_mode = "contract"
                 st.success("Готово!")
-    
-    if st.session_state.last_mode == "contract" and st.session_state.result:
-        st.markdown("---")
-        st.markdown("### 🔍 Результаты:")
-        st.write(st.session_state.result)
-    
-    if st.button("🗑️ Очистить", key="clear_contract"):
-        st.session_state.contract_txt = ""
-        st.session_state.result = ""
-        st.session_state.last_mode = None
-        st.rerun()
 
-# Вкладка 2: Вопрос
 with tab2:
-    q = st.text_area("Ваш вопрос:", height=200, key="question_area")
-    
-    if st.button("⚡ Получить ответ", key="btn_question"):
-        if len(q.strip()) < 10:
-            st.error("💬 Нужно минимум 10 символов")
+    q = st.text_area("Вопрос:", height=250)
+    if st.button("Получить ответ"):
+        if len(q) < 10:
+            st.warning("Минимум 10 символов")
         else:
             with st.spinner("Готовлю ответ..."):
-                # Здесь вызов AI
-                st.session_state.result = "✅ Ответ готов"
-                st.session_state.last_mode = "question"
-                st.success("Готово!")
-    
-    if st.session_state.last_mode == "question" and st.session_state.result:
-        st.markdown("---")
-        st.markdown("### 💬 Консультация:")
-        st.write(st.session_state.result)
-    
-    if st.button("🗑️ Очистить", key="clear_question"):
-        st.session_state.question_txt = ""
-        st.session_state.result = ""
-        st.session_state.last_mode = None
-        st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.caption("🔒 Приватно • Без логов")
+                # Здесь вызов AI  
+                st.success("Ответ готов!")
