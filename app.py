@@ -2,243 +2,155 @@ import streamlit as st
 import requests
 import re
 
-# =============================================================================
-# 🏛 CONTEXT.PRO LEGAL — IMPERIUM EDITION v0.3.5 (KEY FIX)
-# 🔧 Исправлено: Уникальные ключи для всех виджетов
-# =============================================================================
+st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered")
 
-st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered", initial_sidebar_state="expanded")
-
-# --- SESSION STATE ---
+# Session state
 for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction']:
     if key not in st.session_state:
         st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None
 
-# =============================================================================
-# 🎨 CSS "АМПИР"
-# =============================================================================
-EMPIRE_CSS = """
+# Минимальный CSS - только тёмная тема
+st.markdown("""
 <style>
-:root { --empire-bg-primary: #0A1128; --empire-bg-secondary: #1a233a; --empire-gold: #D4AF37; --empire-gold-dim: #B8962E; --empire-text: #FFFFF0; --empire-text-dim: #C0C0C0; --empire-danger: #B22222; --empire-border: 1px solid var(--empire-gold); }
-.stApp, .main, .block-container, .stMarkdown, .stAlert, .stInfo, .stSuccess, .stWarning, .stError, div[data-testid="stMarkdownContainer"], div[data-testid="stTextArea"], div[data-testid="stTextInput"], div[data-testid="stButton"], div[data-testid="stRadio"], div[data-testid="stTabs"], section[data-testid="stSidebar"], .stSidebar { background: var(--empire-bg-primary) !important; color: var(--empire-text) !important; }
-* { color: var(--empire-text) !important; }
-h1, h2, h3, h4, h5, h6 { color: var(--empire-gold) !important; font-family: 'Cormorant Garamond', serif !important; font-weight: 600 !important; }
-.stTextArea textarea, .stTextInput input { background: var(--empire-bg-secondary) !important; color: var(--empire-text) !important; border: 1px solid var(--empire-gold-dim) !important; border-radius: 6px !important; }
-.stTextArea textarea:focus, .stTextInput input:focus { border-color: var(--empire-gold) !important; box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2) !important; }
-.stButton>button { background: transparent !important; border: 2px solid var(--empire-gold) !important; color: var(--empire-gold) !important; font-family: 'Cormorant Garamond', serif !important; font-weight: 600 !important; font-size: 16px !important; border-radius: 6px !important; padding: 12px 24px !important; transition: all 0.3s ease !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
-.stButton>button:hover { background: var(--empire-gold) !important; color: var(--empire-bg-primary) !important; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4) !important; transform: translateY(-1px) !important; }
-.stButton>button:disabled { border-color: var(--empire-text-dim) !important; color: var(--empire-text-dim) !important; cursor: not-allowed !important; opacity: 0.6 !important; }
-.empire-card { background: linear-gradient(135deg, var(--empire-bg-secondary) 0%, var(--empire-bg-primary) 100%) !important; border: var(--empire-border) !important; border-radius: 8px !important; padding: 1.5rem !important; margin: 1.5rem 0 !important; box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important; }
-.empire-card * { color: var(--empire-text) !important; }
-.empire-card h4 { color: var(--empire-gold) !important; border-bottom: 1px solid var(--empire-gold-dim); padding-bottom: 0.5rem; }
-.stWarning, .stError { background: var(--empire-bg-secondary) !important; border-left: 4px solid var(--empire-danger) !important; color: var(--empire-text) !important; }
-.stWarning *, .stError * { color: var(--empire-text) !important; }
-section[data-testid="stSidebar"] { background: var(--empire-bg-secondary) !important; border-right: var(--empire-border) !important; }
-section[data-testid="stSidebar"] * { color: var(--empire-text) !important; }
-#MainMenu, .stDeployButton, footer, header, div[data-testid="stDecoration"], .mobile-menu-btn, [data-testid="stSidebar"] > div:first-child button, div[data-testid="stMarkdown"] pre code { display: none !important; }
-@keyframes empire-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(0.98); } }
-.empire-loading { display: flex !important; align-items: center !important; justify-content: center !important; color: var(--empire-gold) !important; font-weight: 500 !important; font-size: 1.1rem !important; animation: empire-pulse 2s infinite ease-in-out !important; padding: 1.5rem !important; margin: 1rem 0 !important; background: var(--empire-bg-secondary) !important; border: 1px dashed var(--empire-gold-dim) !important; border-radius: 8px !important; }
-.empire-loading::before { content: "⚖️"; margin-right: 0.75rem !important; font-size: 1.4rem !important; }
-@media (max-width: 768px) { .block-container { padding: 1rem !important; } .empire-card { padding: 1rem !important; } .stButton>button { font-size: 14px !important; padding: 10px 20px !important; } }
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500&display=swap');
+.stApp { background-color: #0e1117; color: #fafafa; }
+.stTextArea textarea { background-color: #262730; color: #fafafa; }
+.stTextInput input { background-color: #262730; color: #fafafa; }
 </style>
-"""
-st.markdown(EMPIRE_CSS, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# =============================================================================
-# 🔒 ВАЛИДАЦИЯ
-# =============================================================================
-def validate_input(text: str, mode: str) -> tuple[bool, str]:
+# Заголовок
+st.title("⚖️ Context.Pro Legal")
+st.caption("Анализ договоров • Консультации • РФ/РБ")
+
+# Сайдбар
+with st.sidebar:
+    st.markdown("### ⚙️ Настройки")
+    jurisdiction = st.radio("⚖️ Юрисдикция:", ["🇷🇺 РФ", "🇧🇾 РБ"], index=0, key="jur_radio")
+    st.session_state.jurisdiction = jurisdiction
+    st.markdown("---")
+    if st.button("🗑️ Очистить всё", use_container_width=True, key="clear_all"):
+        for k in ['contract_txt', 'question_txt', 'result', 'last_mode']:
+            st.session_state[k] = ""
+        st.session_state.is_analyzing = False
+        st.rerun()
+    st.caption("🔒 Приватно • Без логов")
+
+# Функции
+def validate_input(text: str, mode: str):
     text = text.strip()
     if not text:
         return False, "⚠️ Поле не может быть пустым"
-    if len(set(text.lower())) < 5 or not re.search(r'[а-яА-Яa-zA-Z]', text):
-        return False, "⚠️ Введите осмысленный текст"
+    if mode == "contract" and len(text) < 50:
+        return False, "📋 Для анализа договора нужно минимум 50 символов"
+    if mode == "question" and len(text) < 10:
+        return False, "💬 Нужно минимум 10 символов"
     if mode == "contract":
-        if len(text) < 50:
-            return False, "📋 Для анализа договора нужно минимум 50 символов"
-        legal_markers = ["договор", "контракт", "сторона", "обязательство", "статья", "ГК", "ФЗ", "пункт", "параграф", "соглашение", "аренда", "поставка", "услуга", "оплата", "ответственность"]
-        if not any(marker in text.lower() for marker in legal_markers):
-            return False, "🔍 Это не похоже на текст договора. Перейдите во вкладку «💬 Вопрос»"
-    elif mode == "question":
-        if len(text) < 10:
-            return False, "💬 Сформулируйте вопрос подробнее (мин. 10 символов)"
+        markers = ["договор", "контракт", "сторона", "обязательство", "статья", "ГК", "ФЗ", "пункт"]
+        if not any(m in text.lower() for m in markers):
+            return False, "🔍 Это не похоже на договор. Перейдите во вкладку «💬 Вопрос»"
     return True, ""
 
-# =============================================================================
-# 🧠 ПРОМПТЫ
-# =============================================================================
-def build_system_prompt(jur: str, mode: str) -> str:
-    jur_base = "Российская Федерация (ГК РФ, ФЗ, практика ВС РФ)" if "РФ" in jur else "Республика Беларусь (ГК РБ, Декреты, практика ВС РБ)"
+def build_prompt(jur: str, mode: str):
+    jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in jur else "РБ (ГК РБ, Декреты)"
     if mode == "contract":
-        return f"""Ты — ИИ-помощник юриста Context.Pro Legal. Юрисдикция: {jur_base}.
-ПРАВИЛА: 1) Если текст не договор или <50 символов → ОТВЕТЬ: "⚠️ Это не похоже на договор." 2) Выдели риски [🔴/🟢], цитируй статьи, дай рекомендации. 3) Не выдумывай статьи. 4) Формат: ### 🔍 Риски • ### ✅ Что в порядке • ### 📋 Итог"""
+        return f"Ты юрист ({jur_base}). Найди риски, статьи, рекомендации. Формат: ### Риски ### Рекомендации"
     else:
-        return f"""Ты — ИИ-консультант по праву. Юрисдикция: {jur_base}.
-ПРАВИЛА: Отвечай только на юридические вопросы. Указывай статьи ГК/ФЗ. Структура: 📌 Суть → ⚖️ Нормы → 🔄 Рекомендации → ⚠️ Нюансы. Дисклеймер в конце."""
+        return f"Ты юрист ({jur_base}). Ответь со статьями. Структура: Суть → Нормы → Рекомендации"
 
-# =============================================================================
-# 🔑 API
-# =============================================================================
-def get_api_key() -> str | None:
+def query_ai(sys_prompt: str, user_text: str):
     try:
-        if "openrouter" in st.secrets and "api_key" in st.secrets["openrouter"]:
-            return st.secrets["openrouter"]["api_key"]
-    except:
-        pass
-    return None
-
-def query_ai(system_prompt: str, user_text: str) -> tuple[str | None, str | None]:
-    api_key = get_api_key()
-    if not api_key:
-        return None, "❌ API ключ не настроен."
-    try:
-        response = requests.post(
+        if "openrouter" not in st.secrets:
+            return None, "❌ API ключ не настроен"
+        key = st.secrets["openrouter"]["api_key"]
+        resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://context-pro.streamlit.app", "X-Title": "Context.Pro Legal"},
-            json={"model": "deepseek/deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_text}], "temperature": 0.2, "max_tokens": 1500, "top_p": 0.9},
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek/deepseek-chat", "messages": [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_text}
+            ], "temperature": 0.2, "max_tokens": 1500},
             timeout=60
         )
-        if response.status_code != 200:
-            return None, f"❌ Ошибка сервиса ({response.status_code})."
-        data = response.json()
-        if "choices" not in data or not data["choices"]:
-            return None, "❌ Пустой ответ"
-        return data["choices"][0]["message"]["content"], None
-    except requests.exceptions.Timeout:
-        return None, "⏱ Тайм-аут."
+        if resp.status_code != 200:
+            return None, f"❌ Ошибка {resp.status_code}"
+        return resp.json()["choices"][0]["message"]["content"], None
     except Exception as e:
-        return None, f"❌ Ошибка: {type(e).__name__}"
+        return None, f"❌ {type(e).__name__}"
 
-# =============================================================================
-# 🎨 UI Helpers
-# =============================================================================
-def render_header():
-    st.markdown('<div style="text-align:center; font-size:2.5rem; margin:0.5rem 0;">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
-    st.markdown('<h1 style="text-align:center; margin:0; color:#D4AF37 !important;">Context.Pro Legal</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align:center; color:#C0C0C0; margin:0.5rem 0 1.5rem; font-size:0.95rem;">Анализ договоров • Консультации • РФ/РБ</p>', unsafe_allow_html=True)
+# Вкладки
+tab_contract, tab_question = st.tabs(["📋 Анализ договора", "💬 Юридический вопрос"])
 
-def render_result_card(content: str, title: str):
-    st.markdown(f"""<div class="empire-card"><h4 style="margin-top:0; border-bottom:1px solid #B8962E; padding-bottom:0.5rem;">{title}</h4><div style="line-height:1.6;">{content}</div></div>""", unsafe_allow_html=True)
-
-def render_footer():
-    st.markdown("""<div style="text-align:center; color:#666; font-size:0.75rem; padding:2rem 1rem 1rem; border-top:1px solid #333; margin-top:2rem;">⚖️ <strong>Context.Pro Legal</strong> | 🇷🇺 РФ • 🇧🇾 РБ | Приватно • Без логов<br><span style="color:#888; font-size:0.7rem;">⚠️ ИИ-помощник не заменяет очную консультацию юриста.</span></div>""", unsafe_allow_html=True)
-
-# =============================================================================
-# 🚀 MAIN — ИСПРАВЛЕННЫЕ УНИКАЛЬНЫЕ КЛЮЧИ
-# =============================================================================
-def main():
-    render_header()
+# Вкладка ДОГОВОР
+with tab_contract:
+    st.markdown("#### 📄 Вставьте текст договора")
+    st.caption("💡 Минимум 50 символов")
     
-    # === ЕДИНЫЙ ПЕРЕКЛЮЧАТЕЛЬ ЮРИСДИКЦИИ (в сайдбаре) ===
-    with st.sidebar:
-        st.markdown("### ⚙️ Настройки")
-        jurisdiction = st.radio(
-            "⚖️ Юрисдикция:",
-            ["🇷🇺 РФ", "🇧🇾 РБ"],
-            index=0,
-            key="jurisdiction_selector_unique",  # ← Уникальный ключ!
-            horizontal=False
-        )
-        st.session_state.jurisdiction = jurisdiction
-        st.markdown("---")
-        if st.button("🗑️ Очистить всё", use_container_width=True, key="btn_clear_all_unique"):
-            for k in ['contract_txt', 'question_txt', 'result', 'last_mode']:
-                st.session_state[k] = ""
+    contract_text = st.text_area("Текст договора:", value=st.session_state.contract_txt, 
+                                  height=220, key="contract_area", placeholder="Скопируйте текст договора...")
+    st.session_state.contract_txt = contract_text
+    
+    if st.button("⚖️ Проверить договор", use_container_width=True, 
+                 disabled=st.session_state.is_analyzing, key="btn_contract"):
+        ok, msg = validate_input(contract_text, "contract")
+        if not ok:
+            st.warning(msg)
+        else:
+            st.session_state.is_analyzing = True
+            st.session_state.last_mode = "contract"
+            result, error = query_ai(build_prompt(jurisdiction, "contract"), contract_text)
             st.session_state.is_analyzing = False
-            st.rerun()
-        st.caption("🔒 Конфиденциально • Без логов")
-    
-    # === ВКЛАДКИ ===
-    tab_contract, tab_question = st.tabs(["📋 Анализ договора", "💬 Юридический вопрос"])
-    
-    # -------------------------------------------------------------------------
-    # ВКЛАДКА: ДОГОВОР
-    # -------------------------------------------------------------------------
-    with tab_contract:
-        st.markdown("#### 📄 Вставьте текст договора")
-        st.caption("💡 Минимум 50 символов")
-        
-        contract_text = st.text_area(
-            "Текст договора:",
-            value=st.session_state.contract_txt,
-            height=220,
-            key="contract_text_area_unique",  # ← Уникальный ключ!
-            placeholder="Скопируйте текст договора..."
-        )
-        st.session_state.contract_txt = contract_text
-        
-        if st.button("⚖️ Проверить договор", use_container_width=True, 
-                     disabled=st.session_state.is_analyzing,
-                     key="btn_contract_analyze_unique"):  # ← Уникальный ключ!
-            is_valid, message = validate_input(contract_text, "contract")
-            if not is_valid:
-                st.warning(message)
+            if error:
+                st.error(error)
             else:
-                st.session_state.is_analyzing = True
-                st.session_state.last_mode = "contract"
-                result, error = query_ai(build_system_prompt(jurisdiction, "contract"), contract_text)
-                st.session_state.is_analyzing = False
-                if error:
-                    st.error(error)
-                else:
-                    st.session_state.result = result
-                    st.rerun()
-        
-        if st.session_state.last_mode == "contract" and st.session_state.result:
-            render_result_card(st.session_state.result, "🔍 Результаты анализа")
-            st.download_button("📥 Скачать отчёт", st.session_state.result, "analysis.txt", "text/plain", 
-                             use_container_width=True, key="btn_download_contract_unique")
-        
-        if st.button("🗑️ Очистить поле", key="btn_clear_contract_unique"):
-            st.session_state.contract_txt = ""
-            st.session_state.result = ""
-            st.session_state.last_mode = None
-            st.rerun()
+                st.session_state.result = result
+                st.rerun()
     
-    # -------------------------------------------------------------------------
-    # ВКЛАДКА: ВОПРОС
-    # -------------------------------------------------------------------------
-    with tab_question:
-        st.markdown("#### ⚖️ Задайте юридический вопрос")
-        st.caption("💡 Минимум 10 символов")
-        
-        question_text = st.text_area(
-            "Ваш вопрос:",
-            value=st.session_state.question_txt,
-            height=200,
-            key="question_text_area_unique",  # ← Уникальный ключ!
-            placeholder="Сформулируйте вопрос..."
-        )
-        st.session_state.question_txt = question_text
-        
-        if st.button("⚡ Получить ответ", use_container_width=True,
-                     disabled=st.session_state.is_analyzing,
-                     key="btn_question_ask_unique"):  # ← Уникальный ключ!
-            is_valid, message = validate_input(question_text, "question")
-            if not is_valid:
-                st.warning(message)
-            else:
-                st.session_state.is_analyzing = True
-                st.session_state.last_mode = "question"
-                result, error = query_ai(build_system_prompt(jurisdiction, "question"), question_text)
-                st.session_state.is_analyzing = False
-                if error:
-                    st.error(error)
-                else:
-                    st.session_state.result = result
-                    st.rerun()
-        
-        if st.session_state.last_mode == "question" and st.session_state.result:
-            render_result_card(st.session_state.result, "💬 Консультация")
-        
-        if st.button("🗑️ Очистить поле", key="btn_clear_question_unique"):
-            st.session_state.question_txt = ""
-            st.session_state.result = ""
-            st.session_state.last_mode = None
-            st.rerun()
+    if st.session_state.last_mode == "contract" and st.session_state.result:
+        st.markdown("#### 🔍 Результаты анализа")
+        st.write(st.session_state.result)
+        st.download_button("📥 Скачать", st.session_state.result, "analysis.txt", "text/plain", key="dl_contract")
     
-    render_footer()
+    if st.button("🗑️ Очистить поле", key="clear_contract"):
+        st.session_state.contract_txt = ""
+        st.session_state.result = ""
+        st.session_state.last_mode = None
+        st.rerun()
 
-if __name__ == "__main__":
-    main()
+# Вкладка ВОПРОС
+with tab_question:
+    st.markdown("#### ⚖️ Задайте юридический вопрос")
+    st.caption("💡 Минимум 10 символов")
+    
+    question_text = st.text_area("Ваш вопрос:", value=st.session_state.question_txt,
+                                  height=200, key="question_area", placeholder="Сформулируйте вопрос...")
+    st.session_state.question_txt = question_text
+    
+    if st.button("⚡ Получить ответ", use_container_width=True,
+                 disabled=st.session_state.is_analyzing, key="btn_question"):
+        ok, msg = validate_input(question_text, "question")
+        if not ok:
+            st.warning(msg)
+        else:
+            st.session_state.is_analyzing = True
+            st.session_state.last_mode = "question"
+            result, error = query_ai(build_prompt(jurisdiction, "question"), question_text)
+            st.session_state.is_analyzing = False
+            if error:
+                st.error(error)
+            else:
+                st.session_state.result = result
+                st.rerun()
+    
+    if st.session_state.last_mode == "question" and st.session_state.result:
+        st.markdown("#### 💬 Консультация")
+        st.write(st.session_state.result)
+    
+    if st.button("🗑️ Очистить поле", key="clear_question"):
+        st.session_state.question_txt = ""
+        st.session_state.result = ""
+        st.session_state.last_mode = None
+        st.rerun()
+
+# Футер
+st.markdown("---")
+st.caption("⚖️ Context.Pro Legal | 🇷 РФ • 🇧 РБ | Приватно • Без логов\n\n⚠️ ИИ-помощник не заменяет очную консультацию юриста.")
