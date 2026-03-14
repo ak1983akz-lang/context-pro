@@ -1,119 +1,222 @@
 import streamlit as st
 import requests
+import re
 
-st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered")
+# =============================================================================
+# 🏛 CONTEXT.PRO LEGAL — v1.0 CLEAN EDITION
+# ✅ Без сложного CSS | ✅ Без спортивных спиннеров | ✅ Всё на главном
+# =============================================================================
 
-# Session state
-if "jur" not in st.session_state:
-    st.session_state.jur = "🇷🇺 РФ"
+st.set_page_config(
+    page_title="Context.Pro Legal",
+    page_icon="⚖️",
+    layout="centered"
+)
 
-# Заголовок — только название, без переключателей
-st.title("⚖️ Context.Pro Legal")
-st.caption("Анализ договоров • РФ / РБ")
+# --- SESSION STATE ---
+if 'jurisdiction' not in st.session_state:
+    st.session_state.jurisdiction = "🇷🇺 РФ"
+if 'contract_txt' not in st.session_state:
+    st.session_state.contract_txt = ""
+if 'question_txt' not in st.session_state:
+    st.session_state.question_txt = ""
+if 'result' not in st.session_state:
+    st.session_state.result = ""
+if 'last_mode' not in st.session_state:
+    st.session_state.last_mode = None
 
-# === САЙДБАР — единственное место для настроек ===
-with st.sidebar:
-    st.markdown("### ⚙️ Настройки")
-    st.session_state.jur = st.radio("Юрисдикция:", ["🇷🇺 РФ", "🇧🇾 РБ"])
-    st.markdown("---")
-    if st.button("🗑️ Очистить всё", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
-    st.markdown("---")
-    st.caption("🔒 Все данные обрабатываются конфиденциально")
-
-# === ПРОМПТЫ ===
-def get_prompt(jur, mode):
-    base = "ГК РФ и законы РФ" if "РФ" in jur else "ГК РБ и законы РБ"
+# =============================================================================
+# 🔒 ВАЛИДАЦИЯ
+# =============================================================================
+def validate_input(text: str, mode: str):
+    text = text.strip()
+    if not text:
+        return False, "⚠️ Поле не может быть пустым"
+    if len(set(text.lower())) < 5 or not re.search(r'[а-яА-Яa-zA-Z]', text):
+        return False, "⚠️ Введите осмысленный текст"
     if mode == "contract":
-        return f"Ты юрист ({base}). Проанализируй договор: найди риски, укажи статьи, дай рекомендации. Будь краток."
-    return f"Ты юрист ({base}). Ответь на вопрос со ссылками на статьи. Будь краток."
+        if len(text) < 50:
+            return False, "📋 Для анализа договора нужно минимум 50 символов"
+        markers = ["договор", "контракт", "сторона", "обязательство", "статья", "ГК", "ФЗ", "пункт", "аренда", "оплата"]
+        if not any(m in text.lower() for m in markers):
+            return False, "🔍 Это не похоже на договор. Перейдите во вкладку «Вопрос»"
+    elif mode == "question":
+        if len(text) < 10:
+            return False, "💬 Нужно минимум 10 символов"
+    return True, ""
 
-# === ЗАПРОС К AI ===
-def ask_ai(prompt, text):
+# =============================================================================
+# 🧠 ПРОМПТЫ
+# =============================================================================
+def build_prompt(jur: str, mode: str) -> str:
+    jur_base = "Российская Федерация (ГК РФ, ФЗ)" if "РФ" in jur else "Республика Беларусь (ГК РБ, Декреты)"
+    if mode == "contract":
+        return f"""Ты — ИИ-помощник юриста. Юрисдикция: {jur_base}.
+Найди риски в договоре. Укажи: [Риск] → [Статья] → [Рекомендация].
+Если текст не договор — скажи об этом."""
+    else:
+        return f"""Ты — ИИ-консультант по праву. Юрисдикция: {jur_base}.
+Ответь на вопрос со ссылками на статьи. Структура: Суть → Нормы → Рекомендации."""
+
+# =============================================================================
+# 🔑 API
+# =============================================================================
+def get_api_key():
     try:
-        key = st.secrets.get("openrouter", {}).get("api_key")
-        if not key:
-            return None, "❌ Нет API ключа в secrets.toml"
-        
-        for attempt in range(2):
-            try:
-                r = requests.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                    json={
-                        "model": "qwen/qwen-2.5-7b-instruct",
-                        "messages": [
-                            {"role": "system", "content": prompt},
-                            {"role": "user", "content": text}
-                        ],
-                        "temperature": 0.2,
-                        "max_tokens": 1200
-                    },
-                    timeout=90
-                )
-                if r.status_code == 401:
-                    return None, "❌ Неверный API ключ"
-                if r.status_code == 429:
-                    return None, "⏳ Лимит запросов. Подождите 1 минуту."
-                if r.status_code != 200:
-                    return None, f"❌ Ошибка {r.status_code}"
-                return r.json()["choices"][0]["message"]["content"], None
-            except requests.exceptions.Timeout:
-                if attempt == 0:
-                    continue
-                return None, "⏱ Тайм-аут. Проверьте интернет."
-            except requests.exceptions.ConnectionError:
-                return None, "🔌 Нет соединения с сервером."
+        if "openrouter" in st.secrets:
+            return st.secrets["openrouter"]["api_key"]
+    except:
+        pass
+    return None
+
+def query_ai(prompt: str, text: str):
+    key = get_api_key()
+    if not key:
+        return None, "❌ API ключ не настроен"
+    try:
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text}
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1500
+            },
+            timeout=60
+        )
+        if r.status_code != 200:
+            return None, f"❌ Ошибка {r.status_code}"
+        data = r.json()
+        if "choices" in data and data["choices"]:
+            return data["choices"][0]["message"]["content"], None
+        return None, "❌ Пустой ответ"
     except Exception as e:
         return None, f"❌ {type(e).__name__}"
 
+# =============================================================================
+# 🎨 UI — ЧИСТЫЙ STREAMLIT (БЕЗ АГРЕССИВНОГО CSS)
+# =============================================================================
+
+# Заголовок
+st.title("⚖️ Context.Pro Legal")
+st.caption("Анализ договоров • Консультации • РФ/РБ")
+
+st.divider()
+
+# === ГЛАВНЫЙ ЭКРАН: ЮРИСДИКЦИЯ ===
+st.subheader("🌍 Юрисдикция")
+jur = st.radio(
+    "Выберите законодательство:",
+    ["🇷🇺 РФ", "🇧🇾 РБ"],
+    horizontal=True,
+    key="jur_radio"
+)
+st.session_state.jurisdiction = jur
+
+st.divider()
+
 # === ВКЛАДКИ ===
-tab_contract, tab_question = st.tabs(["📋 Договор", "💬 Вопрос"])
+tab_contract, tab_question = st.tabs(["📋 Анализ договора", "💬 Юридический вопрос"])
 
-# ▼▼▼ ВКЛАДКА: ДОГОВОР ▼▼▼
+# -------------------------------------------------------------------------
+# ВКЛАДКА 1: ДОГОВОР
+# -------------------------------------------------------------------------
 with tab_contract:
-    st.markdown("#### 📄 Вставьте текст договора")
-    st.caption("💡 Минимум 50 символов")
+    st.session_state.last_mode = "contract"
     
-    txt = st.text_area("Текст договора:", height=200, key="c_txt", placeholder="Скопируйте текст договора...")
+    st.text_area(
+        "Текст договора:",
+        value=st.session_state.contract_txt,
+        height=200,
+        key="contract_area",
+        placeholder="Вставьте текст договора для анализа рисков..."
+    )
     
-    if st.button("⚖️ Проверить договор", key="c_btn"):
-        if not txt or len(txt.strip()) < 50:
-            st.warning("📋 Введите минимум 50 символов")
-        else:
-            # Простой стандартный спиннер — БЕЗ кастомной анимации
-            with st.spinner("Анализирую договор..."):
-                prompt = get_prompt(st.session_state.jur, "contract")
-                res, err = ask_ai(prompt, txt)
-                if err:
-                    st.error(err)
-                else:
-                    st.success("✅ Анализ завершён")
-                    st.markdown(res)
-                    st.download_button("📥 Скачать результат", res, "analysis.txt", "text/plain")
+    # Кнопки в ряд
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.button("⚖️ Проверить договор", use_container_width=True, type="primary", key="btn_contract"):
+            text = st.session_state.get("contract_area", "")
+            ok, msg = validate_input(text, "contract")
+            if not ok:
+                st.warning(msg)
+            else:
+                with st.spinner("⏳ Анализирую договор..."):
+                    result, err = query_ai(build_prompt(jur, "contract"), text)
+                    if err:
+                        st.error(err)
+                    else:
+                        st.session_state.result = result
+                        st.success("✅ Анализ завершён")
+    
+    with col2:
+        if st.button("🗑️ Очистить", use_container_width=True, key="clear_contract"):
+            st.session_state.contract_txt = ""
+            st.session_state.result = ""
+            st.rerun()
+    
+    # Результат
+    if st.session_state.result and st.session_state.last_mode == "contract":
+        st.markdown("### 📋 Результат:")
+        st.write(st.session_state.result)
+        st.download_button(
+            "📥 Скачать",
+            st.session_state.result,
+            "analysis.txt",
+            "text/plain",
+            use_container_width=True,
+            key="dl_contract"
+        )
 
-# ▼▼▼ ВКЛАДКА: ВОПРОС ▼▼▼
+# -------------------------------------------------------------------------
+# ВКЛАДКА 2: ВОПРОС
+# -------------------------------------------------------------------------
 with tab_question:
-    st.markdown("#### ⚖️ Задайте юридический вопрос")
-    st.caption("💡 Минимум 10 символов")
+    st.session_state.last_mode = "question"
     
-    q = st.text_area("Ваш вопрос:", height=200, key="q_txt", placeholder="Например: Какие риски по ст. 651 ГК РФ?")
+    st.text_area(
+        "Ваш вопрос:",
+        value=st.session_state.question_txt,
+        height=200,
+        key="question_area",
+        placeholder="Задайте юридический вопрос..."
+    )
     
-    if st.button("⚡ Получить ответ", key="q_btn"):
-        if not q or len(q.strip()) < 10:
-            st.warning("💬 Введите минимум 10 символов")
-        else:
-            # Простой стандартный спиннер — БЕЗ кастомной анимации
-            with st.spinner("Готовлю ответ..."):
-                prompt = get_prompt(st.session_state.jur, "question")
-                res, err = ask_ai(prompt, q)
-                if err:
-                    st.error(err)
-                else:
-                    st.success("✅ Ответ готов")
-                    st.markdown(res)
+    # Кнопки в ряд
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.button("⚡ Получить ответ", use_container_width=True, type="primary", key="btn_question"):
+            text = st.session_state.get("question_area", "")
+            ok, msg = validate_input(text, "question")
+            if not ok:
+                st.warning(msg)
+            else:
+                with st.spinner("⏳ Готовлю ответ..."):
+                    result, err = query_ai(build_prompt(jur, "question"), text)
+                    if err:
+                        st.error(err)
+                    else:
+                        st.session_state.result = result
+                        st.success("✅ Ответ готов")
+    
+    with col2:
+        if st.button("🗑️ Очистить", use_container_width=True, key="clear_question"):
+            st.session_state.question_txt = ""
+            st.session_state.result = ""
+            st.rerun()
+    
+    # Результат
+    if st.session_state.result and st.session_state.last_mode == "question":
+        st.markdown("### 💬 Ответ:")
+        st.write(st.session_state.result)
 
-# === ФУТЕР — нейтральный дисклеймер ===
-st.markdown("---")
-st.caption("Инструмент предварительного анализа • Для официальной консультации обратитесь к юристу • Конфиденциально")
+# =============================================================================
+# 📎 FOOTER
+# =============================================================================
+st.divider()
+st.caption("⚖️ Context.Pro Legal | 🇷🇺 РФ • 🇧🇾 РБ | Приватно • Без логов")
+st.caption("⚠️Программа не заменяет очную консультацию юриста")
