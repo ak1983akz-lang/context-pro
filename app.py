@@ -118,58 +118,54 @@ def query_ai(system_prompt: str, user_text: str):
         return None, f"❌ {type(e).__name__}"
 
 # =============================================================================
-# 📷 OCR — TESSERACT
+# 📷 OCR — EASYOCR (ЧИСТЫЙ PYTHON)
 # =============================================================================
-def extract_text_from_image_tesseract(image_file):
+@st.cache_resource
+def get_easyocr_reader():
+    """Инициализирует EasyOCR один раз (кэшируется)"""
     try:
-        import pytesseract
-        img = Image.open(image_file).convert('L')
-        text = pytesseract.image_to_string(img, lang='rus+eng')
-        text = text.strip()
+        import easyocr
+        reader = easyocr.Reader(['ru', 'en'], gpu=False, verbose=False)
+        return reader, None
+    except Exception as e:
+        return None, str(e)
+
+def extract_text_from_image(image_file):
+    """Распознаёт текст через EasyOCR"""
+    try:
+        from PIL import Image
+        import numpy as np
+        
+        # Открываем изображение
+        img = Image.open(image_file).convert('RGB')
+        img_array = np.array(img)
+        
+        # Инициализируем Reader
+        reader, err = get_easyocr_reader()
+        if err:
+            return None, f"❌ EasyOCR: {err}"
+        
+        # Распознавание
+        results = reader.readtext(img_array, detail=0)
+        text = ' '.join(results).strip()
+        
         if len(text) < 10:
             return None, "⚠️ Текст не распознан. Сделайте фото чётче."
+        
         return text, None
+        
     except Exception as e:
-        return None, f"❌ Tesseract: {str(e)}"
+        return None, f"❌ Ошибка OCR: {str(e)}"
 
 # =============================================================================
-# 📷 OCR — OCR.SPACE API (АЛЬТЕРНАТИВА)
+# 🧪 ТЕСТ OCR
 # =============================================================================
-def extract_text_from_image_ocrspace(image_file):
+def test_ocr():
     try:
-        api_key = st.secrets.get("ocr_space_api_key", "helloworld")
-        files = {'file': image_file.getvalue()}
-        data = {'apikey': api_key, 'language': 'rus', 'isOverlayRequired': 'false', 'scale': 'true'}
-        response = requests.post('https://apiv2.ocr.space/parse/image', files=files, data=data, timeout=30)
-        result = response.json()
-        if result.get('IsErroredOnProcessing'):
-            return None, "❌ Ошибка OCR сервиса"
-        text = result['ParsedResults'][0]['ParsedText'].strip()
-        if len(text) < 10:
-            return None, "⚠️ Текст не распознан"
-        return text, None
-    except Exception as e:
-        return None, f"❌ OCR.Space: {str(e)}"
-
-# =============================================================================
-# 📷 OCR — ВЫБОР МЕТОДА
-# =============================================================================
-def extract_text_from_image(image_file):
-    # Пробуем Tesseract сначала
-    text, err = extract_text_from_image_tesseract(image_file)
-    if text:
-        return text, None
-    # Если не сработало — пробуем OCR.Space
-    return extract_text_from_image_ocrspace(image_file)
-
-# =============================================================================
-# 🧪 ТЕСТ TESSERACT
-# =============================================================================
-def test_tesseract():
-    try:
-        import pytesseract
-        version = pytesseract.get_tesseract_version()
-        return True, f"✅ Tesseract {version}"
+        reader, err = get_easyocr_reader()
+        if err:
+            return False, f"❌ {err}"
+        return True, "✅ EasyOCR готов к работе"
     except Exception as e:
         return False, f"❌ {str(e)}"
 
@@ -183,12 +179,12 @@ st.caption("Анализ договоров • РФ/РБ")
 # 🧪 КНОПКА ТЕСТА OCR
 # =============================================================================
 with st.expander("🧪 Тест OCR (нажмите для проверки)"):
-    tesseract_ok, tesseract_msg = test_tesseract()
-    if tesseract_ok:
-        st.success(tesseract_msg)
+    ocr_ok, ocr_msg = test_ocr()
+    if ocr_ok:
+        st.success(ocr_msg)
     else:
-        st.error(tesseract_msg)
-        st.info("💡 Tesseract не работает — используется OCR.Space API")
+        st.error(ocr_msg)
+        st.info("💡 OCR недоступен — используйте ручной ввод текста")
 
 # =============================================================================
 # ⚖️ ЮРИСДИКЦИЯ
@@ -232,10 +228,11 @@ with tab1:
         st.info("📱 Нажмите кнопку и сфотографируйте договор")
         img_file = st.camera_input("📸 Сделайте фото", key="contract_camera")
         if img_file:
-            with st.spinner("🔍 Распознаю..."):
+            with st.spinner("🔍 Распознаю текст (может занять 10-30 сек)..."):
                 extracted, error = extract_text_from_image(img_file)
                 if error:
                     st.error(error)
+                    st.warning("⚠️ Попробуйте ввести текст вручную")
                 elif extracted:
                     contract_text = extracted
                     st.success(f"✅ Распознано {len(extracted)} симв.")
