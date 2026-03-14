@@ -2,10 +2,10 @@ import streamlit as st
 import requests
 import re
 import os
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 
 # =============================================================================
-# 🔧 НАСТРОЙКА TESSERACT ДЛЯ WINDOWS (раскомментируйте если нужно)
+# 🔧 НАСТРОЙКА TESSERACT (для Streamlit Cloud — ЗАКОММЕНТИРОВАНО)
 # =============================================================================
 # import pytesseract
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -151,17 +151,46 @@ def query_ai(system_prompt: str, user_text: str):
         return None, f"❌ Ошибка: {type(e).__name__}"
 
 # =============================================================================
-# 📷 OCR — РАСПОЗНАВАНИЕ ТЕКСТА С ФОТО
+# 📷 OCR — УЛУЧШЕННОЕ РАСПОЗНАВАНИЕ С ПРЕДОБРАБОТКОЙ
 # =============================================================================
 def extract_text_from_image(image_file):
-    """Распознаёт текст на фото договора"""
+    """Распознаёт текст на фото договора с предобработкой изображения"""
     try:
         import pytesseract
-        img = Image.open(image_file)
-        text = pytesseract.image_to_string(img, lang='rus+eng')
-        return text.strip(), None
-    except ImportError:
-        return None, "❌ pytesseract не установлен. Выполните: pip install pytesseract"
+        
+        # Открываем изображение
+        img = Image.open(image_file).convert('L')  # Конвертируем в ч/б
+        
+        # === ПРЕДОБРАБОТКА ИЗОБРАЖЕНИЯ ===
+        
+        # 1. Увеличиваем контраст
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(2.0)
+        
+        # 2. Увеличиваем резкость
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(1.5)
+        
+        # 3. Убираем шум
+        img = img.filter(ImageFilter.MedianFilter(size=3))
+        
+        # 4. Бинаризация (чёрно-белый порог)
+        threshold = 150
+        img = img.point(lambda p: 255 if p > threshold else 0)
+        
+        # === РАСПОЗНАВАНИЕ ===
+        config = '--psm 6 -l rus+eng'
+        text = pytesseract.image_to_string(img, config=config)
+        text = text.strip()
+        
+        # Проверка качества
+        if len(text) < 20 or not any(c.isalpha() for c in text):
+            return None, "⚠️ Не удалось распознать текст. Сделайте фото чётче, при хорошем освещении."
+        
+        return text, None
+        
+    except ImportError as e:
+        return None, f"❌ pytesseract не установлен. Установите: pip install pytesseract"
     except Exception as e:
         return None, f"❌ Ошибка OCR: {str(e)}"
 
@@ -217,22 +246,22 @@ with tab1:
         )
     else:
         # 📷 КАМЕРА
-        st.info("📱 Наведите камеру на текст договора. Убедитесь, что текст чёткий и хорошо освещён.")
+        st.info("📱 Наведите камеру на текст. Освещение должно быть хорошим, текст — крупным и чётким.")
         img_file = st.camera_input("📸 Сделайте фото договора", key="contract_camera")
         
         if img_file:
-            with st.spinner("🔍 Распознаю текст на фото..."):
+            with st.spinner("🔍 Распознаю текст..."):
                 extracted, error = extract_text_from_image(img_file)
                 if error:
                     st.error(error)
-                elif extracted and len(extracted) > 20:
+                elif extracted:
                     contract_text = extracted
                     st.success(f"✅ Распознано {len(extracted)} символов")
-                    with st.expander("👁️ Показать распознанный текст"):
+                    with st.expander("👁️ Показать текст"):
                         st.text(extracted[:500] + "..." if len(extracted) > 500 else extracted)
                     st.session_state.contract_txt = extracted
                 else:
-                    st.warning("⚠️ Не удалось распознать текст. Попробуйте сделать фото чётче.")
+                    st.warning("⚠️ Не удалось распознать. Попробуйте ещё раз.")
     
     if contract_text:
         st.session_state.contract_txt = contract_text
