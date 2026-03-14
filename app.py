@@ -3,26 +3,19 @@ import requests
 import re
 
 # =============================================================================
-# 🏛 CONTEXT.PRO LEGAL — IMPERIUM EDITION v0.3.4 (BUTTON LOGIC FIX)
-# 🔧 Исправлено: Кнопки теперь гарантированно запускают AI
+# 🏛 CONTEXT.PRO LEGAL — IMPERIUM EDITION v0.3.5 (KEY FIX)
+# 🔧 Исправлено: Уникальные ключи для всех виджетов
 # =============================================================================
 
 st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered", initial_sidebar_state="expanded")
 
 # --- SESSION STATE ---
-if 'contract_txt' not in st.session_state:
-    st.session_state.contract_txt = ""
-if 'question_txt' not in st.session_state:
-    st.session_state.question_txt = ""
-if 'result' not in st.session_state:
-    st.session_state.result = ""
-if 'last_mode' not in st.session_state:
-    st.session_state.last_mode = None  # 'contract' или 'question'
-if 'is_analyzing' not in st.session_state:
-    st.session_state.is_analyzing = False
+for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction']:
+    if key not in st.session_state:
+        st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None
 
 # =============================================================================
-# 🎨 CSS "АМПИР" (Без изменений)
+# 🎨 CSS "АМПИР"
 # =============================================================================
 EMPIRE_CSS = """
 <style>
@@ -46,8 +39,7 @@ section[data-testid="stSidebar"] * { color: var(--empire-text) !important; }
 @keyframes empire-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(0.98); } }
 .empire-loading { display: flex !important; align-items: center !important; justify-content: center !important; color: var(--empire-gold) !important; font-weight: 500 !important; font-size: 1.1rem !important; animation: empire-pulse 2s infinite ease-in-out !important; padding: 1.5rem !important; margin: 1rem 0 !important; background: var(--empire-bg-secondary) !important; border: 1px dashed var(--empire-gold-dim) !important; border-radius: 8px !important; }
 .empire-loading::before { content: "⚖️"; margin-right: 0.75rem !important; font-size: 1.4rem !important; }
-@media (max-width: 768px) { .mobile-jurisdiction { display: block !important; } .desktop-only { display: none !important; } .block-container { padding: 1rem !important; } .empire-card { padding: 1rem !important; } .stButton>button { font-size: 14px !important; padding: 10px 20px !important; } }
-@media (min-width: 769px) { .mobile-jurisdiction { display: none !important; } }
+@media (max-width: 768px) { .block-container { padding: 1rem !important; } .empire-card { padding: 1rem !important; } .stButton>button { font-size: 14px !important; padding: 10px 20px !important; } }
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500&display=swap');
 </style>
 """
@@ -122,30 +114,9 @@ def query_ai(system_prompt: str, user_text: str) -> tuple[str | None, str | None
 # 🎨 UI Helpers
 # =============================================================================
 def render_header():
-    st.markdown('<div style="text-align:center; font-size:2.5rem; margin:0.5rem 0;">🇷 &nbsp; ⚖️ &nbsp; 🇧</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; font-size:2.5rem; margin:0.5rem 0;">🇷🇺 &nbsp; ⚖️ &nbsp; 🇧🇾</div>', unsafe_allow_html=True)
     st.markdown('<h1 style="text-align:center; margin:0; color:#D4AF37 !important;">Context.Pro Legal</h1>', unsafe_allow_html=True)
     st.markdown('<p style="text-align:center; color:#C0C0C0; margin:0.5rem 0 1.5rem; font-size:0.95rem;">Анализ договоров • Консультации • РФ/РБ</p>', unsafe_allow_html=True)
-
-def render_jurisdiction_toggle() -> str:
-    st.markdown('<div class="mobile-jurisdiction">', unsafe_allow_html=True)
-    jur_mobile = st.radio("⚖️ Юрисдикция:", ["🇷🇺 РФ", "🇧🇾 РБ"], horizontal=True, index=0, key="jur_mobile_radio", label_visibility="collapsed")
-    st.markdown('</div>', unsafe_allow_html=True)
-    with st.sidebar:
-        st.markdown("### ⚙️ Настройки", unsafe_allow_html=True)
-        jur_desktop = st.radio("⚖️ Юрисдикция:", ["🇷🇺 РФ", "🇧 РБ"], horizontal=False, index=0, key="jur_desktop_radio")
-        st.markdown("---")
-        if st.button("🗑️ Очистить всё", use_container_width=True):
-            for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode']:
-                st.session_state[key] = "" if key not in ['is_analyzing'] else False
-            st.rerun()
-        st.markdown("---")
-        st.caption("🔒 Конфиденциально • Без логов")
-    
-    if st.session_state.get("jur_mobile_radio"):
-        return st.session_state.jur_mobile_radio
-    elif st.session_state.get("jur_desktop_radio"):
-        return st.session_state.jur_desktop_radio
-    return "🇷🇺 РФ"
 
 def render_result_card(content: str, title: str):
     st.markdown(f"""<div class="empire-card"><h4 style="margin-top:0; border-bottom:1px solid #B8962E; padding-bottom:0.5rem;">{title}</h4><div style="line-height:1.6;">{content}</div></div>""", unsafe_allow_html=True)
@@ -154,111 +125,120 @@ def render_footer():
     st.markdown("""<div style="text-align:center; color:#666; font-size:0.75rem; padding:2rem 1rem 1rem; border-top:1px solid #333; margin-top:2rem;">⚖️ <strong>Context.Pro Legal</strong> | 🇷🇺 РФ • 🇧🇾 РБ | Приватно • Без логов<br><span style="color:#888; font-size:0.7rem;">⚠️ ИИ-помощник не заменяет очную консультацию юриста.</span></div>""", unsafe_allow_html=True)
 
 # =============================================================================
-# 🚀 MAIN LOGIC — УПРОЩЁННАЯ И НАДЁЖНАЯ
+# 🚀 MAIN — ИСПРАВЛЕННЫЕ УНИКАЛЬНЫЕ КЛЮЧИ
 # =============================================================================
 def main():
     render_header()
-    jurisdiction = render_jurisdiction_toggle()
     
+    # === ЕДИНЫЙ ПЕРЕКЛЮЧАТЕЛЬ ЮРИСДИКЦИИ (в сайдбаре) ===
+    with st.sidebar:
+        st.markdown("### ⚙️ Настройки")
+        jurisdiction = st.radio(
+            "⚖️ Юрисдикция:",
+            ["🇷🇺 РФ", "🇧🇾 РБ"],
+            index=0,
+            key="jurisdiction_selector_unique",  # ← Уникальный ключ!
+            horizontal=False
+        )
+        st.session_state.jurisdiction = jurisdiction
+        st.markdown("---")
+        if st.button("🗑️ Очистить всё", use_container_width=True, key="btn_clear_all_unique"):
+            for k in ['contract_txt', 'question_txt', 'result', 'last_mode']:
+                st.session_state[k] = ""
+            st.session_state.is_analyzing = False
+            st.rerun()
+        st.caption("🔒 Конфиденциально • Без логов")
+    
+    # === ВКЛАДКИ ===
     tab_contract, tab_question = st.tabs(["📋 Анализ договора", "💬 Юридический вопрос"])
     
     # -------------------------------------------------------------------------
-    # ЛОГИКА ДЛЯ ВКЛАДКИ "ДОГОВОР"
+    # ВКЛАДКА: ДОГОВОР
     # -------------------------------------------------------------------------
     with tab_contract:
-        # Если мы вернулись сюда после анализа, результат уже в session_state
-        # Но нам нужно знать, откуда он пришел.
-        
         st.markdown("#### 📄 Вставьте текст договора")
         st.caption("💡 Минимум 50 символов")
         
-        contract_text = st.text_area("Текст договора:", value=st.session_state.contract_txt, height=220, key="contract_input", placeholder="Скопируйте текст договора...")
+        contract_text = st.text_area(
+            "Текст договора:",
+            value=st.session_state.contract_txt,
+            height=220,
+            key="contract_text_area_unique",  # ← Уникальный ключ!
+            placeholder="Скопируйте текст договора..."
+        )
+        st.session_state.contract_txt = contract_text
         
-        # Сохраняем текст при любом изменении
-        if contract_text != st.session_state.contract_txt:
-            st.session_state.contract_txt = contract_text
-        
-        # Кнопка запуска
-        btn_clicked = st.button("⚖️ Проверить договор", use_container_width=True, disabled=st.session_state.is_analyzing, key="btn_contract_action")
-        
-        if btn_clicked:
+        if st.button("⚖️ Проверить договор", use_container_width=True, 
+                     disabled=st.session_state.is_analyzing,
+                     key="btn_contract_analyze_unique"):  # ← Уникальный ключ!
             is_valid, message = validate_input(contract_text, "contract")
             if not is_valid:
                 st.warning(message)
             else:
-                # ЗАПУСК АНАЛИЗА ПРЯМО ЗДЕСЬ, БЕЗ ЛИШНЕГО RERUN
                 st.session_state.is_analyzing = True
                 st.session_state.last_mode = "contract"
-                
-                with st.spinner("Запуск..."): # Временный спиннер пока идет запрос
-                    result, error = query_ai(build_system_prompt(jurisdiction, "contract"), contract_text)
-                    
-                    st.session_state.is_analyzing = False
-                    if error:
-                        st.error(error)
-                    else:
-                        st.session_state.result = result
-                        # Принудительно обновляем отображение
-                        st.rerun()
-
-        # Блок отображения результата (если режим договор)
+                result, error = query_ai(build_system_prompt(jurisdiction, "contract"), contract_text)
+                st.session_state.is_analyzing = False
+                if error:
+                    st.error(error)
+                else:
+                    st.session_state.result = result
+                    st.rerun()
+        
         if st.session_state.last_mode == "contract" and st.session_state.result:
             render_result_card(st.session_state.result, "🔍 Результаты анализа")
-            st.download_button("📥 Скачать отчёт", st.session_state.result, "context_pro_analysis.txt", "text/plain", use_container_width=True, key="dl_contract")
+            st.download_button("📥 Скачать отчёт", st.session_state.result, "analysis.txt", "text/plain", 
+                             use_container_width=True, key="btn_download_contract_unique")
         
-        if st.button("🗑️ Очистить поле", key="clear_contract"):
+        if st.button("🗑️ Очистить поле", key="btn_clear_contract_unique"):
             st.session_state.contract_txt = ""
             st.session_state.result = ""
             st.session_state.last_mode = None
             st.rerun()
-
+    
     # -------------------------------------------------------------------------
-    # ЛОГИКА ДЛЯ ВКЛАДКИ "ВОПРОС"
+    # ВКЛАДКА: ВОПРОС
     # -------------------------------------------------------------------------
     with tab_question:
         st.markdown("#### ⚖️ Задайте юридический вопрос")
         st.caption("💡 Минимум 10 символов")
         
-        question_text = st.text_area("Ваш вопрос:", value=st.session_state.question_txt, height=200, key="question_input", placeholder="Сформулируйте вопрос...")
+        question_text = st.text_area(
+            "Ваш вопрос:",
+            value=st.session_state.question_txt,
+            height=200,
+            key="question_text_area_unique",  # ← Уникальный ключ!
+            placeholder="Сформулируйте вопрос..."
+        )
+        st.session_state.question_txt = question_text
         
-        if question_text != st.session_state.question_txt:
-            st.session_state.question_txt = question_text
-        
-        btn_clicked = st.button("⚡ Получить ответ", use_container_width=True, disabled=st.session_state.is_analyzing, key="btn_question_action")
-        
-        if btn_clicked:
+        if st.button("⚡ Получить ответ", use_container_width=True,
+                     disabled=st.session_state.is_analyzing,
+                     key="btn_question_ask_unique"):  # ← Уникальный ключ!
             is_valid, message = validate_input(question_text, "question")
             if not is_valid:
                 st.warning(message)
             else:
-                # ЗАПУСК АНАЛИЗА ПРЯМО ЗДЕСЬ
                 st.session_state.is_analyzing = True
                 st.session_state.last_mode = "question"
-                
-                with st.spinner("Запуск..."):
-                    result, error = query_ai(build_system_prompt(jurisdiction, "question"), question_text)
-                    
-                    st.session_state.is_analyzing = False
-                    if error:
-                        st.error(error)
-                    else:
-                        st.session_state.result = result
-                        st.rerun()
-
-        # Блок отображения результата
+                result, error = query_ai(build_system_prompt(jurisdiction, "question"), question_text)
+                st.session_state.is_analyzing = False
+                if error:
+                    st.error(error)
+                else:
+                    st.session_state.result = result
+                    st.rerun()
+        
         if st.session_state.last_mode == "question" and st.session_state.result:
             render_result_card(st.session_state.result, "💬 Консультация")
         
-        if st.button("🗑️ Очистить поле", key="clear_question"):
+        if st.button("🗑️ Очистить поле", key="btn_clear_question_unique"):
             st.session_state.question_txt = ""
             st.session_state.result = ""
             st.session_state.last_mode = None
             st.rerun()
-
+    
     render_footer()
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
