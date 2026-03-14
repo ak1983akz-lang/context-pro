@@ -2,9 +2,13 @@ import streamlit as st
 import requests
 import re
 import os
-import time
+from PIL import Image
 
-st.set_page_config(page_title="Context.Pro Legal", page_icon="⚖️", layout="centered")
+# =============================================================================
+# 🔧 НАСТРОЙКА TESSERACT ДЛЯ WINDOWS (раскомментируйте если нужно)
+# =============================================================================
+# import pytesseract
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # =============================================================================
 # SESSION STATE
@@ -14,7 +18,7 @@ for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode
         st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False
 
 # =============================================================================
-# CSS
+# CSS — СТИЛИ + СПИНЕР
 # =============================================================================
 st.markdown("""
 <style>
@@ -22,7 +26,6 @@ st.markdown("""
 .stTextArea textarea { background: #262730; color: #fafafa; }
 .stButton>button { background: #1f77b4; color: white; }
 
-/* Спинер - строгая пульсация */
 @keyframes empire-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.7; transform: scale(0.98); }
@@ -50,7 +53,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# ВАЛИДАЦИЯ
+# 🔒 ВАЛИДАЦИЯ ВВОДА
 # =============================================================================
 def validate_input(text: str, mode: str):
     text = text.strip()
@@ -70,7 +73,7 @@ def validate_input(text: str, mode: str):
     return True, ""
 
 # =============================================================================
-# СИСТЕМНЫЕ ПРОМПТЫ
+# 🧠 СИСТЕМНЫЕ ПРОМПТЫ
 # =============================================================================
 def build_system_prompt(jur: str, mode: str) -> str:
     jur_base = "Российская Федерация (ГК РФ, ФЗ, практика ВС РФ)" if "РФ" in jur else "Республика Беларусь (ГК РБ, Декреты, практика ВС РБ)"
@@ -78,41 +81,25 @@ def build_system_prompt(jur: str, mode: str) -> str:
         return f"""Ты — профессиональный ИИ-помощник юриста Context.Pro Legal. Юрисдикция: {jur_base}.
 
 ПРАВИЛА:
-1. Если текст не является договором или не содержит юридических терминов → ОТВЕТЬ: "⚠️ Это не похоже на текст договора."
+1. Если текст не является договором → ОТВЕТЬ: "⚠️ Это не похоже на текст договора."
 2. Выдели риски: [🔴 Критический] / [🟡 Средний] / [🟢 Низкий]
-3. Цитируй конкретные статьи законов (ГК РФ/РБ, ФЗ, Декреты)
-4. Дай практическую рекомендацию по исправлению
-5. Будь краток, но точен
-6. Не выдумывай статьи законов
-7. Не смешивай нормы РФ и РБ
-
-ФОРМАТ ОТВЕТА:
-### 🔍 Выявленные риски
-• [Уровень] Риск: описание → Статья закона → Рекомендация
-
-### ✅ Что в порядке
-• Пункты без рисков
-
-### 📋 Итог
-Краткая оценка + дисклеймер
+3. Цитируй статьи законов (ГК РФ/РБ, ФЗ, Декреты)
+4. Дай рекомендацию по исправлению
+5. Не выдумывай статьи
+6. ФОРМАТ: ### 🔍 Риски • ### ✅ Что в порядке • ### 📋 Итог
 """
     else:
-        return f"""Ты — профессиональный ИИ-консультант по праву. Юрисдикция: {jur_base}.
+        return f"""Ты — ИИ-консультант по праву. Юрисдикция: {jur_base}.
 
 ПРАВИЛА:
-1. Отвечай ТОЛЬКО на юридические вопросы
-2. Всегда указывай нормативную базу: статьи ГК РФ/РБ, номера ФЗ, Декретов
-3. Структура ответа:
-   ### 📌 Суть вопроса
-   ### ⚖️ Нормативная база
-   ### 🔄 Пошаговые рекомендации
-   ### ⚠️ Важные нюансы
-4. Дисклеймер в конце: "Консультация носит информационный характер"
-5. Будь точен, но доступен
+1. Отвечай только на юридические вопросы
+2. Указывай статьи ГК/ФЗ/Декретов
+3. Структура: 📌 Суть → ⚖️ Нормы → 🔄 Рекомендации → ⚠️ Нюансы
+4. Дисклеймер в конце
 """
 
 # =============================================================================
-# API KEY
+# 🔑 API KEY
 # =============================================================================
 def get_api_key():
     try:
@@ -123,13 +110,12 @@ def get_api_key():
     return os.getenv("OPENROUTER_API_KEY")
 
 # =============================================================================
-# ЗАПРОС К AI
+# 🤖 ЗАПРОС К AI
 # =============================================================================
 def query_ai(system_prompt: str, user_text: str):
     api_key = get_api_key()
     if not api_key:
         return None, "❌ API ключ не настроен. Проверьте secrets.toml"
-    
     try:
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -151,95 +137,133 @@ def query_ai(system_prompt: str, user_text: str):
             },
             timeout=60
         )
-        
         if response.status_code != 200:
             return None, f"❌ Ошибка сервиса ({response.status_code})"
-        
         data = response.json()
         if "choices" not in data or not data["choices"]:
-            return None, "❌ Пустой ответ от сервиса"
-        
+            return None, "❌ Пустой ответ"
         return data["choices"][0]["message"]["content"], None
-        
     except requests.exceptions.Timeout:
-        return None, "⏱ Тайм-аут соединения. Проверьте интернет."
+        return None, "⏱ Тайм-аут соединения."
     except requests.exceptions.ConnectionError:
-        return None, "🔌 Ошибка подключения к сети."
+        return None, "🔌 Ошибка подключения."
     except Exception as e:
         return None, f"❌ Ошибка: {type(e).__name__}"
 
 # =============================================================================
-# UI - ШАПКА
+# 📷 OCR — РАСПОЗНАВАНИЕ ТЕКСТА С ФОТО
+# =============================================================================
+def extract_text_from_image(image_file):
+    """Распознаёт текст на фото договора"""
+    try:
+        import pytesseract
+        img = Image.open(image_file)
+        text = pytesseract.image_to_string(img, lang='rus+eng')
+        return text.strip(), None
+    except ImportError:
+        return None, "❌ pytesseract не установлен. Выполните: pip install pytesseract"
+    except Exception as e:
+        return None, f"❌ Ошибка OCR: {str(e)}"
+
+# =============================================================================
+# 🎨 UI — ШАПКА
 # =============================================================================
 st.title("⚖️ Context.Pro Legal")
 st.caption("Анализ договоров • Консультации • РФ/РБ")
 
 # =============================================================================
-# ЮРИСДИКЦИЯ НА ГЛАВНОЙ (вместо сайдбара)
+# ⚖️ ЮРИСДИКЦИЯ НА ГЛАВНОЙ
 # =============================================================================
 st.markdown("### ⚖️ Юрисдикция")
 jur = st.radio(
     "Выберите законодательство:",
     ["🇷🇺 РФ", "🇧🇾 РБ"],
     horizontal=True,
-    index=0 if st.session_state.jurisdiction == "🇷🇺 РФ" else 1,
+    index=0,
     key="jurisdiction_radio"
 )
 st.session_state.jurisdiction = jur
-
 st.markdown("---")
 
 # =============================================================================
-# ВКЛАДКИ
+# 📋 ВКЛАДКИ
 # =============================================================================
 tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
 
 # =============================================================================
-# ВКЛАДКА 1: ДОГОВОР
+# ВКЛАДКА 1: ДОГОВОР (С КАМЕРОЙ)
 # =============================================================================
 with tab1:
     st.markdown("#### 📄 Текст договора")
-    st.caption("💡 Минимум 50 символов")
+    st.caption("💡 Вставьте текст ИЛИ сфотографируйте договор")
     
-    text = st.text_area(
-        "Вставьте текст договора:",
-        value=st.session_state.contract_txt,
-        height=220,
-        key="contract_input",
-        placeholder="Скопируйте сюда полный текст договора..."
+    # Переключатель: текст или фото
+    input_mode = st.radio(
+        "Способ ввода:",
+        ["✍️ Вставить текст", "📷 Сфотографировать"],
+        horizontal=True,
+        key="contract_input_mode"
     )
-    st.session_state.contract_txt = text
     
+    contract_text = ""
+    
+    if input_mode == "✍️ Вставить текст":
+        contract_text = st.text_area(
+            "Текст договора:",
+            value=st.session_state.contract_txt,
+            height=220,
+            key="contract_text_input",
+            placeholder="Скопируйте сюда текст договора..."
+        )
+    else:
+        # 📷 КАМЕРА
+        st.info("📱 Наведите камеру на текст договора. Убедитесь, что текст чёткий и хорошо освещён.")
+        img_file = st.camera_input("📸 Сделайте фото договора", key="contract_camera")
+        
+        if img_file:
+            with st.spinner("🔍 Распознаю текст на фото..."):
+                extracted, error = extract_text_from_image(img_file)
+                if error:
+                    st.error(error)
+                elif extracted and len(extracted) > 20:
+                    contract_text = extracted
+                    st.success(f"✅ Распознано {len(extracted)} символов")
+                    with st.expander("👁️ Показать распознанный текст"):
+                        st.text(extracted[:500] + "..." if len(extracted) > 500 else extracted)
+                    st.session_state.contract_txt = extracted
+                else:
+                    st.warning("⚠️ Не удалось распознать текст. Попробуйте сделать фото чётче.")
+    
+    if contract_text:
+        st.session_state.contract_txt = contract_text
+    
+    # Кнопки
     col1, col2 = st.columns([3, 1])
-    
     with col1:
-        analyze_btn = st.button("⚖️ Проверить договор", use_container_width=True, key="btn_contract", disabled=st.session_state.is_analyzing)
-    
+        analyze_btn = st.button(
+            "⚖️ Проверить договор", 
+            use_container_width=True, 
+            key="btn_contract",
+            disabled=st.session_state.is_analyzing or not (contract_text.strip() if contract_text else False)
+        )
     with col2:
         if st.button("🗑️", key="clear_contract"):
-            st.session_state.contract_txt = ""
-            st.session_state.result = ""
-            st.session_state.last_mode = None
+            for k in ['contract_txt', 'result', 'last_mode']:
+                st.session_state[k] = "" if k != 'last_mode' else None
             st.rerun()
     
     # ОБРАБОТКА АНАЛИЗА
-    if analyze_btn:
-        is_valid, message = validate_input(text, "contract")
+    if analyze_btn and contract_text and contract_text.strip():
+        is_valid, message = validate_input(contract_text, "contract")
         if not is_valid:
             st.warning(message)
         else:
-            # Показываем спинер
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "contract"
-            
-            # СПИНЕР
             st.markdown('<div class="empire-loading">Анализирую договор по нормам ' + jur + '...</div>', unsafe_allow_html=True)
-            
             sys_prompt = build_system_prompt(jur, "contract")
-            result, error = query_ai(sys_prompt, text)
-            
+            result, error = query_ai(sys_prompt, contract_text)
             st.session_state.is_analyzing = False
-            
             if error:
                 st.error(error)
             else:
@@ -252,7 +276,6 @@ with tab1:
         st.markdown("---")
         st.markdown("### 🔍 Результаты анализа")
         st.markdown(st.session_state.result)
-        
         st.download_button(
             "📥 Скачать отчёт",
             st.session_state.result,
@@ -279,34 +302,31 @@ with tab2:
     st.session_state.question_txt = q
     
     col1, col2 = st.columns([3, 1])
-    
     with col1:
-        ask_btn = st.button("⚡ Получить ответ", use_container_width=True, key="btn_question", disabled=st.session_state.is_analyzing)
-    
+        ask_btn = st.button(
+            "⚡ Получить ответ", 
+            use_container_width=True, 
+            key="btn_question",
+            disabled=st.session_state.is_analyzing or not (q.strip() if q else False)
+        )
     with col2:
         if st.button("🗑️", key="clear_question"):
-            st.session_state.question_txt = ""
-            st.session_state.result = ""
-            st.session_state.last_mode = None
+            for k in ['question_txt', 'result', 'last_mode']:
+                st.session_state[k] = "" if k != 'last_mode' else None
             st.rerun()
     
     # ОБРАБОТКА ВОПРОСА
-    if ask_btn:
+    if ask_btn and q and q.strip():
         is_valid, message = validate_input(q, "question")
         if not is_valid:
             st.warning(message)
         else:
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "question"
-            
-            # СПИНЕР
             st.markdown('<div class="empire-loading">Готовлю консультацию по ' + jur + '...</div>', unsafe_allow_html=True)
-            
             sys_prompt = build_system_prompt(jur, "question")
             result, error = query_ai(sys_prompt, q)
-            
             st.session_state.is_analyzing = False
-            
             if error:
                 st.error(error)
             else:
