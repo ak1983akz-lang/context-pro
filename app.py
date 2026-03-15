@@ -10,12 +10,16 @@ for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode
     if key not in st.session_state:
         st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None if key == 'last_mode' else True if key == 'first_visit' else False
 
+# =============================================================================
+# 📱 CSS — ИСПРАВЛЕННАЯ ШАПКА ДЛЯ МОБИЛЬНЫХ
+# =============================================================================
+st.markdown("""
 <style>
 .stApp { 
     background: #0e1117; 
     color: #fafafa; 
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding-top: 1rem !important; /* Отступ сверху для мобильных */
+    padding-top: 1rem !important;
 }
 .stTextArea textarea { 
     background: #262730; 
@@ -32,7 +36,6 @@ for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode
     border-radius: 8px !important;
 }
 
-/* Заголовки — адаптивные */
 h1 { 
     font-size: 1.8rem !important; 
     margin-bottom: 0.5rem !important; 
@@ -42,7 +45,6 @@ h2 { font-size: 1.4rem !important; }
 h3 { font-size: 1.2rem !important; }
 h4 { font-size: 1rem !important; }
 
-/* Спинер */
 @keyframes empire-pulse { 
     0%, 100% { opacity: 1; transform: scale(1); } 
     50% { opacity: 0.7; transform: scale(0.98); } 
@@ -69,26 +71,17 @@ h4 { font-size: 1rem !important; }
 
 /* === МОБИЛЬНАЯ АДАПТАЦИЯ === */
 @media (max-width: 768px) {
-    /* Убираем лишние отступы Streamlit */
     .main > div { padding: 0 !important; }
-    
-    /* Контейнер с правильными отступами */
     .block-container { 
         padding: 1rem 1rem 0.5rem 1rem !important; 
         max-width: 100% !important;
-        padding-top: max(1rem, env(safe-area-inset-top)) !important; /* Учёт "чёлки" */
+        padding-top: max(1rem, env(safe-area-inset-top)) !important;
     }
-    
-    /* Заголовки меньше на мобильных */
     h1 { font-size: 1.3rem !important; margin-top: 0.3rem !important; }
     h2 { font-size: 1.1rem !important; }
     h3 { font-size: 1rem !important; }
     h4 { font-size: 0.9rem !important; }
-    
-    /* Caption меньше */
     .stMarkdown p { font-size: 0.85rem !important; }
-    
-    /* Кнопки — большие для пальцев */
     .stButton>button { 
         font-size: 16px !important; 
         padding: 14px 24px !important; 
@@ -97,19 +90,12 @@ h4 { font-size: 1rem !important; }
         width: 100% !important;
         margin: 0.2rem 0 !important;
     }
-    
-    /* Поля ввода */
     .stTextArea textarea, .stTextInput input { 
         font-size: 16px !important; 
         padding: 12px !important;
         min-height: 120px !important;
     }
-    
-    /* Радио-кнопки вертикально */
-    .stRadio > div { 
-        flex-direction: column !important; 
-        gap: 6px !important; 
-    }
+    .stRadio > div { flex-direction: column !important; gap: 6px !important; }
     .stRadio label { 
         width: 100% !important; 
         padding: 12px !important; 
@@ -121,33 +107,14 @@ h4 { font-size: 1rem !important; }
         align-items: center !important;
         font-size: 0.95rem !important;
     }
-    
-    /* Колонки */
-    .stColumns > div { 
-        width: 100% !important; 
-        margin-bottom: 10px !important; 
-    }
-    
-    /* Вкладки */
-    .stTabs [data-baseweb="tab-list"] { 
-        gap: 4px !important;
-        font-size: 14px !important;
-        padding: 0 !important;
-    }
-    .stTabs [data-baseweb="tab"] { 
-        padding: 10px 16px !important;
-        min-height: 45px !important;
-    }
-    
-    /* Скрываем сайдбар */
+    .stColumns > div { width: 100% !important; margin-bottom: 10px !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 4px !important; font-size: 14px !important; padding: 0 !important; }
+    .stTabs [data-baseweb="tab"] { padding: 10px 16px !important; min-height: 45px !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-    
-    /* Убираем горизонтальный скролл */
     body { overflow-x: hidden !important; max-width: 100vw !important; }
     div[data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
 }
 
-/* Маленькие телефоны (до 480px) */
 @media (max-width: 480px) {
     .block-container { padding: 0.8rem 0.8rem 0.5rem 0.8rem !important; }
     h1 { font-size: 1.2rem !important; }
@@ -158,7 +125,6 @@ h4 { font-size: 1rem !important; }
     .stRadio label { font-size: 0.9rem !important; padding: 10px !important; }
 }
 
-/* iPhone safe areas */
 @supports (padding: max(0px)) {
     @media (max-width: 768px) {
         .block-container {
@@ -170,19 +136,13 @@ h4 { font-size: 1rem !important; }
     }
 }
 
-/* Touch-friendly */
 @media (hover: none) and (pointer: coarse) {
-    .stButton>button {
-        min-height: 55px !important;
-        min-width: 100px !important;
-        touch-action: manipulation !important;
-    }
-    .stRadio label {
-        min-height: 50px !important;
-        touch-action: manipulation !important;
-    }
+    .stButton>button { min-height: 55px !important; min-width: 100px !important; touch-action: manipulation !important; }
+    .stRadio label { min-height: 50px !important; touch-action: manipulation !important; }
 }
 </style>
+""", unsafe_allow_html=True)
+
 # =============================================================================
 # 🔒 ВАЛИДАЦИЯ
 # =============================================================================
@@ -258,7 +218,7 @@ st.title("⚖️ Context.Pro Legal")
 st.caption("Анализ договоров • Консультации • РФ/РБ")
 
 # =============================================================================
-# 📋 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО ПОСЕЩЕНИЯ (ИСПРАВЛЕННАЯ)
+# 📋 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО ПОСЕЩЕНИЯ
 # =============================================================================
 if st.session_state.first_visit:
     st.markdown("### 📖 Как пользоваться Context.Pro Legal")
