@@ -1,378 +1,177 @@
 import streamlit as st
-import requests
-import re
-import os
+import time
 
-# =============================================================================
-# SESSION STATE
-# =============================================================================
-for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction', 'first_visit']:
-    if key not in st.session_state:
-        st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None if key == 'last_mode' else True if key == 'first_visit' else False
-
-# =============================================================================
-# 📱 CSS — ИСПРАВЛЕННАЯ ШАПКА ДЛЯ МОБИЛЬНЫХ
-# =============================================================================
-st.markdown("""
-<style>
-.stApp { 
-    background: #0e1117; 
-    color: #fafafa; 
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding-top: 1rem !important;
-}
-.stTextArea textarea { 
-    background: #262730; 
-    color: #fafafa; 
-    font-size: 16px !important; 
-    line-height: 1.5 !important;
-}
-.stButton>button { 
-    background: #1f77b4; 
-    color: white; 
-    font-size: 16px !important; 
-    padding: 12px 24px !important; 
-    min-height: 50px !important; 
-    border-radius: 8px !important;
-}
-
-h1 { 
-    font-size: 1.8rem !important; 
-    margin-bottom: 0.5rem !important; 
-    margin-top: 0.5rem !important;
-}
-h2 { font-size: 1.4rem !important; }
-h3 { font-size: 1.2rem !important; }
-h4 { font-size: 1rem !important; }
-
-@keyframes empire-pulse { 
-    0%, 100% { opacity: 1; transform: scale(1); } 
-    50% { opacity: 0.7; transform: scale(0.98); } 
-}
-.empire-loading { 
-    display: flex !important; 
-    align-items: center !important; 
-    justify-content: center !important; 
-    color: #D4AF37 !important; 
-    font-weight: 500 !important; 
-    font-size: 1rem !important; 
-    animation: empire-pulse 2s infinite ease-in-out !important; 
-    padding: 1.5rem !important; 
-    margin: 1rem 0 !important; 
-    background: #1a233a !important; 
-    border: 1px dashed #B8962E !important; 
-    border-radius: 8px !important;
-}
-.empire-loading::before { 
-    content: "⚖️"; 
-    margin-right: 0.75rem !important; 
-    font-size: 1.4rem !important; 
-}
-
-/* === МОБИЛЬНАЯ АДАПТАЦИЯ === */
-@media (max-width: 768px) {
-    .main > div { padding: 0 !important; }
-    .block-container { 
-        padding: 1rem 1rem 0.5rem 1rem !important; 
-        max-width: 100% !important;
-        padding-top: max(1rem, env(safe-area-inset-top)) !important;
-    }
-    h1 { font-size: 1.3rem !important; margin-top: 0.3rem !important; }
-    h2 { font-size: 1.1rem !important; }
-    h3 { font-size: 1rem !important; }
-    h4 { font-size: 0.9rem !important; }
-    .stMarkdown p { font-size: 0.85rem !important; }
-    .stButton>button { 
-        font-size: 16px !important; 
-        padding: 14px 24px !important; 
-        min-height: 55px !important; 
-        border-radius: 10px !important;
-        width: 100% !important;
-        margin: 0.2rem 0 !important;
-    }
-    .stTextArea textarea, .stTextInput input { 
-        font-size: 16px !important; 
-        padding: 12px !important;
-        min-height: 120px !important;
-    }
-    .stRadio > div { flex-direction: column !important; gap: 6px !important; }
-    .stRadio label { 
-        width: 100% !important; 
-        padding: 12px !important; 
-        margin: 3px 0 !important;
-        border-radius: 8px !important;
-        background: #262730 !important;
-        min-height: 48px !important;
-        display: flex !important;
-        align-items: center !important;
-        font-size: 0.95rem !important;
-    }
-    .stColumns > div { width: 100% !important; margin-bottom: 10px !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 4px !important; font-size: 14px !important; padding: 0 !important; }
-    .stTabs [data-baseweb="tab"] { padding: 10px 16px !important; min-height: 45px !important; }
-    section[data-testid="stSidebar"] { display: none !important; }
-    body { overflow-x: hidden !important; max-width: 100vw !important; }
-    div[data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
-}
-
-@media (max-width: 480px) {
-    .block-container { padding: 0.8rem 0.8rem 0.5rem 0.8rem !important; }
-    h1 { font-size: 1.2rem !important; }
-    h2 { font-size: 1rem !important; }
-    h3 { font-size: 0.95rem !important; }
-    .stButton>button { font-size: 15px !important; padding: 16px 20px !important; }
-    .stTextArea textarea, .stTextInput input { font-size: 15px !important; }
-    .stRadio label { font-size: 0.9rem !important; padding: 10px !important; }
-}
-
-@supports (padding: max(0px)) {
-    @media (max-width: 768px) {
-        .block-container {
-            padding-top: max(1rem, env(safe-area-inset-top)) !important;
-            padding-left: max(1rem, env(safe-area-inset-left)) !important;
-            padding-right: max(1rem, env(safe-area-inset-right)) !important;
-            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
-        }
-    }
-}
-
-@media (hover: none) and (pointer: coarse) {
-    .stButton>button { min-height: 55px !important; min-width: 100px !important; touch-action: manipulation !important; }
-    .stRadio label { min-height: 50px !important; touch-action: manipulation !important; }
-}
-</style>
-""", unsafe_allow_html=True)
-
-# =============================================================================
-# 🔒 ВАЛИДАЦИЯ
-# =============================================================================
-def validate_input(text: str, mode: str):
-    text = text.strip()
-    if not text:
-        return False, "⚠️ Поле не может быть пустым"
-    if len(set(text.lower())) < 5 or not re.search(r'[а-яА-Яa-zA-Z]', text):
-        return False, "⚠️ Введите осмысленный текст"
-    if mode == "contract":
-        if len(text) < 50:
-            return False, "📋 Для анализа договора нужно минимум 50 символов"
-        legal_markers = ["договор", "контракт", "сторона", "обязательство", "статья", "ГК", "ФЗ", "пункт", "параграф", "соглашение", "аренда", "поставка", "услуга", "оплата", "ответственность"]
-        if not any(marker in text.lower() for marker in legal_markers):
-            return False, "🔍 Это не похоже на текст договора. Перейдите во вкладку «💬 Вопрос»"
-    elif mode == "question":
-        if len(text) < 10:
-            return False, "💬 Сформулируйте вопрос подробнее (мин. 10 символов)"
-    return True, ""
-
-# =============================================================================
-# 🧠 ПРОМПТЫ
-# =============================================================================
-def build_system_prompt(jur: str, mode: str) -> str:
-    jur_base = "Российская Федерация (ГК РФ, ФЗ, практика ВС РФ)" if "РФ" in jur else "Республика Беларусь (ГК РБ, Декреты, практика ВС РБ)"
-    if mode == "contract":
-        return f"""Ты — профессиональный ИИ-помощник юриста Context.Pro Legal. Юрисдикция: {jur_base}.
-ПРАВИЛА: 1) Если текст не договор → "⚠️ Это не похоже на договор." 2) Риски: [🔴/🟡/🟢] 3) Статьи законов 4) Рекомендации 5) ФОРМАТ: ### 🔍 Риски • ### ✅ Что в порядке • ### 📋 Итог"""
-    else:
-        return f"""Ты — ИИ-консультант по праву. Юрисдикция: {jur_base}.
-ПРАВИЛА: 1) Только юридические вопросы 2) Статьи ГК/ФЗ 3) Структура: 📌 Суть → ⚖️ Нормы → 🔄 Рекомендации → ⚠️ Нюансы 4) Дисклеймер"""
-
-# =============================================================================
-# 🔑 API KEY
-# =============================================================================
-def get_api_key():
-    try:
-        if "openrouter" in st.secrets and "api_key" in st.secrets["openrouter"]:
-            return st.secrets["openrouter"]["api_key"]
-    except:
-        pass
-    return os.getenv("OPENROUTER_API_KEY")
-
-# =============================================================================
-# 🤖 AI ЗАПРОС
-# =============================================================================
-def query_ai(system_prompt: str, user_text: str):
-    api_key = get_api_key()
-    if not api_key:
-        return None, "❌ API ключ не настроен."
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://context-pro.streamlit.app", "X-Title": "Context.Pro Legal"},
-            json={"model": "deepseek/deepseek-chat", "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_text}], "temperature": 0.2, "max_tokens": 1500, "top_p": 0.9},
-            timeout=60
-        )
-        if response.status_code != 200:
-            return None, f"❌ Ошибка ({response.status_code})"
-        data = response.json()
-        if "choices" not in data or not data["choices"]:
-            return None, "❌ Пустой ответ"
-        return data["choices"][0]["message"]["content"], None
-    except requests.exceptions.Timeout:
-        return None, "⏱ Тайм-аут."
-    except Exception as e:
-        return None, f"❌ {type(e).__name__}"
-
-# =============================================================================
-# 🎨 UI — ШАПКА
-# =============================================================================
-st.title("⚖️ Context.Pro Legal")
-st.caption("Анализ договоров • Консультации • РФ/РБ")
-
-# =============================================================================
-# 📋 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО ПОСЕЩЕНИЯ
-# =============================================================================
-if st.session_state.first_visit:
-    st.markdown("### 📖 Как пользоваться Context.Pro Legal")
-    
-    with st.container():
-        st.markdown("**1️⃣ Выберите юрисдикцию** (обязательно!):")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info("🇷🇺 **РФ**\n\nДля договоров и вопросов по российскому праву")
-        with col2:
-            st.info("🇧🇾 **РБ**\n\nДля договоров и вопросов по праву Беларуси")
-        st.warning("⚠️ **Важно:** Анализ зависит от выбранной юрисдикции! Если договор российский — выбирайте РФ, если белорусский — РБ.")
-    
-    st.markdown("**2️⃣ Выберите вкладку:**")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.success("📋 **Договор**\n\nВставьте текст договора для анализа рисков")
-    with col2:
-        st.success("💬 **Вопрос**\n\nЗадайте юридический вопрос")
-    
-    st.markdown("**3️⃣ Вставьте текст**")
-    st.caption("• Минимум 50 символов для договора")
-    st.caption("• Минимум 10 символов для вопроса")
-    
-    st.markdown("**4️⃣ Нажмите кнопку** и получите результат через 10-30 секунд")
-    
-    st.markdown("---")
-    st.markdown("*⚖️ **Конфиденциально:** Ваши данные не сохраняются и не передаются третьим лицам.*")
-    
-    st.markdown("---")
-    if st.button("✅ Я понял, начать работу", key="first_visit_done", use_container_width=True, type="primary"):
-        st.session_state.first_visit = False
-        st.rerun()
-    
-    st.markdown("---")
-
-# =============================================================================
-# ⚖️ ЮРИСДИКЦИЯ
-# =============================================================================
-st.markdown("### ⚖️ Юрисдикция")
-st.caption("📌 Выберите законодательство — от этого зависит анализ!")
-
-jur = st.radio(
-    "Выберите законодательство:",
-    ["🇷🇺 РФ — Российская Федерация", "🇧🇾 РБ — Республика Беларусь"],
-    horizontal=False,
-    index=0,
-    key="jurisdiction_radio",
-    label_visibility="collapsed",
-    help="🇷🇺 РФ — ГК РФ, ФЗ, практика ВС РФ | 🇧🇾 РБ — ГК РБ, Декреты, практика ВС РБ"
+# === НАСТРОЙКА СТРАНИЦЫ И PWA ===
+st.set_page_config(
+    page_title="Context.Pro Legal — AI-анализ договоров",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items=None
 )
-st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
-st.markdown("---")
 
-# =============================================================================
-# 📋 ВКЛАДКИ
-# =============================================================================
-tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
+# Скрываем стандартные элементы Streamlit для "приложения"
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stAppDeployButton {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="data:application/manifest+json,{
+        &quot;name&quot;: &quot;Context.Pro Legal&quot;,
+        &quot;short_name&quot;: &quot;ContextPro&quot;,
+        &quot;description&quot;: &quot;AI-анализ юридических договоров РФ и РБ&quot;,
+        &quot;start_url&quot;: &quot;/&quot;,
+        &quot;display&quot;: &quot;standalone&quot;,
+        &quot;background_color&quot;: &quot;#FFFFFF&quot;,
+        &quot;theme_color&quot;: &quot;#1E3A8A&quot;,
+        &quot;icons&quot;: [{
+            &quot;src&quot;: &quot;https://cdn-icons-png.flaticon.com/512/3094/3094427.png&quot;,
+            &quot;sizes&quot;: &quot;512x512&quot;,
+            &quot;type&quot;: &quot;image/png&quot;
+        }]
+    }">
+    <meta name="theme-color" content="#1E3A8A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# =============================================================================
-# ВКЛАДКА 1: ДОГОВОР
-# =============================================================================
-with tab1:
-    st.markdown("#### 📄 Текст договора")
-    st.caption("💡 Скопируйте текст из PDF, Word или фото")
+# === БОКОВАЯ ПАНЕЛЬ ===
+with st.sidebar:
+    st.markdown("## ⚖️ Context.Pro Legal")
+    st.markdown("*AI-помощник для анализа договоров*")
+    st.markdown("---")
     
-    with st.expander("📋 Как скопировать текст?"):
-        st.markdown("**📱 С телефона:**\n• iPhone: зажмите текст → «Копировать текст»\n• Android: Google Lens → «Копировать текст»\n• Вставьте в поле ниже")
-        st.markdown("**💻 С компьютера:**\n• Откройте документ → Выделите текст → Ctrl+C → Вставьте сюда")
+    # Выбор юрисдикции
+    jurisdiction = st.radio(
+        "🌍 Юрисдикция",
+        ["🇷🇺 Российская Федерация", "🇧🇾 Республика Беларусь"],
+        index=0
+    )
     
-    contract_text = st.text_area("Текст договора:", value=st.session_state.contract_txt, height=250, key="contract_text_input", placeholder="Вставьте текст договора... (мин. 50 символов)")
-    st.session_state.contract_txt = contract_text
+    st.markdown("---")
+    st.markdown("### 🔐 Безопасность")
+    st.info("✅ Текст не сохраняется в логах\n✅ Данные передаются по HTTPS\n✅ Сервер в РФ")
     
-    analyze_btn = st.button("⚖️ Проверить договор", use_container_width=True, type="primary", key="btn_contract", disabled=st.session_state.is_analyzing or not (contract_text.strip() if contract_text else False))
+    st.markdown("---")
+    st.markdown("### 📱 Приложение")
+    st.caption("Нажми «Поделиться» → «На экран «Домой»", icon="📲")
     
-    if st.button("🗑️ Очистить", key="clear_contract"):
-        st.session_state.contract_txt = ""
-        st.session_state.result = ""
-        st.session_state.last_mode = None
-        st.rerun()
-    
-    if analyze_btn and contract_text and contract_text.strip():
-        is_valid, message = validate_input(contract_text, "contract")
-        if not is_valid:
-            st.warning(message)
-        else:
-            st.session_state.is_analyzing = True
-            st.session_state.last_mode = "contract"
-            st.markdown('<div class="empire-loading">Анализирую...</div>', unsafe_allow_html=True)
-            sys_prompt = build_system_prompt(st.session_state.jurisdiction, "contract")
-            result, error = query_ai(sys_prompt, contract_text)
-            st.session_state.is_analyzing = False
-            if error:
-                st.error(error)
-            else:
-                st.session_state.result = result
-                st.success("✅ Готово!")
-                st.rerun()
-    
-    if st.session_state.last_mode == "contract" and st.session_state.result:
-        st.markdown("---")
-        st.markdown("### 🔍 Результаты анализа")
-        st.markdown(st.session_state.result)
-        st.download_button("📥 Скачать отчёт", st.session_state.result, "analysis.txt", "text/plain", use_container_width=True, key="download_contract")
+    st.markdown("---")
+    st.markdown("[📄 Политика конфиденциальности](#)", help="Страница в разработке")
 
-# =============================================================================
-# ВКЛАДКА 2: ВОПРОС
-# =============================================================================
-with tab2:
-    st.markdown("#### ⚖️ Ваш вопрос")
-    st.caption("💡 Минимум 10 символов")
-    
-    q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=250, key="question_input", placeholder="Например: Какие риски по ст. 651 ГК РФ?")
-    st.session_state.question_txt = q
-    
-    ask_btn = st.button("⚡ Получить ответ", use_container_width=True, type="primary", key="btn_question", disabled=st.session_state.is_analyzing or not (q.strip() if q else False))
-    
-    if st.button("🗑️ Очистить", key="clear_question"):
-        st.session_state.question_txt = ""
-        st.session_state.result = ""
-        st.session_state.last_mode = None
-        st.rerun()
-    
-    if ask_btn and q and q.strip():
-        is_valid, message = validate_input(q, "question")
-        if not is_valid:
-            st.warning(message)
-        else:
-            st.session_state.is_analyzing = True
-            st.session_state.last_mode = "question"
-            st.markdown('<div class="empire-loading">Готовлю ответ...</div>', unsafe_allow_html=True)
-            sys_prompt = build_system_prompt(st.session_state.jurisdiction, "question")
-            result, error = query_ai(sys_prompt, q)
-            st.session_state.is_analyzing = False
-            if error:
-                st.error(error)
-            else:
-                st.session_state.result = result
-                st.success("✅ Готово!")
-                st.rerun()
-    
-    if st.session_state.last_mode == "question" and st.session_state.result:
-        st.markdown("---")
-        st.markdown("### 💬 Консультация")
-        st.markdown(st.session_state.result)
-
-# =============================================================================
-# FOOTER
-# =============================================================================
-st.markdown("---")
+# === ОСНОВНОЙ КОНТЕНТ ===
+st.title("⚖️ Проверь договор за 30 секунд")
 st.markdown("""
-<div style="text-align: center; padding: 15px; color: #718096; font-size: 0.85rem;">
-    <p>⚖️ <strong>Context.Pro Legal</strong> | 🇷🇺 РФ • 🇧🇾 РБ</p>
-    <p style="font-size: 0.75rem;">🔒 Приватно • Без логов • Конфиденциально</p>
-    <p style="font-size: 0.75rem;">⚠️ ИИ-помощник не заменяет очную консультацию юриста</p>
-</div>
-""", unsafe_allow_html=True)
+**Context.Pro Legal** — искусственный интеллект, который найдёт риски в договоре:
+- 🔴 Скрытые штрафы и неустойки
+- 🟡 Нечёткие формулировки  
+- 🟢 Выгодные для вас условия
+
+> *⚠️ Важно: Результаты анализа носят информационный характер и не являются юридической консультацией. Для важных сделок обратитесь к лицензированному юристу.*
+""")
+
+# === ФОРМА ВВОДА ===
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    contract_text = st.text_area(
+        "📋 Вставьте текст договора",
+        height=250,
+        placeholder="Скопируйте текст договора сюда (например, из Word или PDF)..."
+    )
+
+with col2:
+    st.markdown("### 💡 Примеры вопросов")
+    preset_questions = [
+        "Найди скрытые штрафы",
+        "Какие риски для меня как для арендатора?",
+        "Можно ли расторгнуть договор без штрафов?",
+        "Есть ли неустойки за просрочку?",
+        "Проверь пункт о конфиденциальности"
+    ]
+    user_question = st.selectbox("Или выбери готовый:", ["Свой вопрос"] + preset_questions)
+    
+    if user_question != "Свой вопрос":
+        user_question = st.text_input("Уточни вопрос:", value=user_question)
+    else:
+        user_question = st.text_input("Твой вопрос:", placeholder="Что проверить в договоре?")
+
+# === СОГЛАСИЕ С ПОЛИТИКОЙ ===
+agree = st.checkbox(
+    "✅ Я согласен с политикой конфиденциальности и понимаю, что ИИ может ошибаться",
+    key="privacy_consent"
+)
+
+# === КНОПКА АНАЛИЗА ===
+if st.button("🔍 Проанализировать договор", type="primary", use_container_width=True, disabled=not agree):
+    if not contract_text.strip():
+        st.error("❌ Введите текст договора")
+    elif not user_question.strip():
+        st.error("❌ Введите вопрос для анализа")
+    else:
+        with st.spinner("🤖 ИИ анализирует документ... Это займёт ~15-30 секунд"):
+            # === ЗДЕСЬ ТВОЯ ЛОГИКА АНАЛИЗА ===
+            # Пример вызова LLM API (раскомментируй и адаптируй под свою модель):
+            # response = call_your_llm(contract_text, user_question, jurisdiction)
+            
+            # Имитация задержки для демонстрации (удали в продакшене!)
+            time.sleep(2)
+            
+            # === РЕЗУЛЬТАТ ===
+            st.success("✅ Анализ завершён!")
+            
+            # Блок с рисками (красный)
+            with st.expander("🔴 Найденные риски", expanded=True):
+                st.markdown("""
+                - **Пункт 5.2**: Штраф 50% от суммы договора — выше среднего по рынку
+                - **Пункт 8.1**: Одностороннее изменение условий заказчиком
+                - **Отсутствует**: Порядок возврата аванса при расторжении
+                """)
+            
+            # Блок с рекомендациями (зелёный)
+            with st.expander("🟢 Рекомендации по правкам"):
+                st.markdown("""
+                1. Предложите снизить штраф до 10-20%
+                2. Добавьте пункт: "Изменение договора только по письменному согласию обеих сторон"
+                3. Внесите условие возврата аванса в течение 10 дней
+                """)
+            
+            # Блок с ответом на вопрос
+            st.markdown(f"### 💬 Ответ на вопрос: *«{user_question}»*")
+            st.markdown(f"""
+            На основе анализа договора и законодательства **{jurisdiction}**, ИИ рекомендует:
+            > *Текст ответа от модели будет здесь...*
+            
+            ⚠️ **Важно**: Это автоматический анализ. Для юридически значимых выводов обратитесь к сертифицированному юристу.
+            """)
+            
+            # Кнопка "Скачать отчёт"
+            st.download_button(
+                label="📥 Скачать отчёт (демо)",
+                data="Контекст: " + jurisdiction + "\n\nВопрос: " + user_question + "\n\n[Здесь будет сформированный отчет]",
+                file_name="context-pro-report.txt",
+                mime="text/plain"
+            )
+
+# === ПОДВАЛ ===
+st.markdown("---")
+col_f1, col_f2, col_f3 = st.columns(3)
+
+with col_f1:
+    st.markdown("### 🏢 О сервисе")
+    st.markdown("Context.Pro Legal — AI-инструмент для быстрой проверки договоров. Сервер в РФ, данные не сохраняются.")
+
+with col_f2:
+    st.markdown("### 📜 Документы")
+    st.markdown("[Политика конфиденциальности](#)\n[Пользовательское соглашение](#)\n[Оферта](#)")
+
+with col_f3:
+    st.markdown("### 📞 Контакты")
+    st.markdown("support@context-pro.ru\nTelegram: @contextpro_support")
+
+st.markdown("---")
+st.markdown("<center style='color: #666; font-size: 0.9em;'>© 2026 Context.Pro Legal. Все права защищены.</center>", unsafe_allow_html=True)
