@@ -11,183 +11,45 @@ for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode
         st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None if key == 'last_mode' else True if key == 'first_visit' else False
 
 # =============================================================================
-# 📱 CSS — УЛУЧШЕННАЯ АДАПТАЦИЯ ПОД ANDROID/IPHONE
+# 📱 CSS — УЛУЧШЕННАЯ АДАПТАЦИЯ
 # =============================================================================
 st.markdown("""
 <style>
-/* === БАЗОВЫЕ СТИЛИ === */
-.stApp { 
-    background: #0e1117; 
-    color: #fafafa; 
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-}
-.stTextArea textarea { 
-    background: #262730; 
-    color: #fafafa; 
-    font-size: 16px !important; 
-    line-height: 1.5 !important;
-}
-.stButton>button { 
-    background: #1f77b4; 
-    color: white; 
-    font-size: 16px !important; 
-    padding: 12px 24px !important; 
-    min-height: 50px !important;
-    border-radius: 8px !important;
-}
-
-/* === ЗАГОЛОВКИ === */
+.stApp { background: #0e1117; color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.stTextArea textarea { background: #262730; color: #fafafa; font-size: 16px !important; line-height: 1.5 !important; }
+.stButton>button { background: #1f77b4; color: white; font-size: 16px !important; padding: 12px 24px !important; min-height: 50px !important; border-radius: 8px !important; }
 h1 { font-size: 1.8rem !important; margin-bottom: 0.5rem !important; }
 h2 { font-size: 1.4rem !important; }
 h3 { font-size: 1.2rem !important; }
-h4 { font-size: 1rem !important; }
 
-/* === СПИНЕР === */
-@keyframes empire-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(0.98); }
-}
-.empire-loading {
-    display: flex !important; 
-    align-items: center !important; 
-    justify-content: center !important;
-    color: #D4AF37 !important; 
-    font-weight: 500 !important; 
-    font-size: 1rem !important;
-    animation: empire-pulse 2s infinite ease-in-out !important;
-    padding: 1.5rem !important; 
-    margin: 1rem 0 !important;
-    background: #1a233a !important; 
-    border: 1px dashed #B8962E !important; 
-    border-radius: 8px !important;
-}
-.empire-loading::before { 
-    content: "⚖️"; 
-    margin-right: 0.75rem !important; 
-    font-size: 1.4rem !important; 
-}
+@keyframes empire-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(0.98); } }
+.empire-loading { display: flex !important; align-items: center !important; justify-content: center !important; color: #D4AF37 !important; font-weight: 500 !important; font-size: 1rem !important; animation: empire-pulse 2s infinite ease-in-out !important; padding: 1.5rem !important; margin: 1rem 0 !important; background: #1a233a !important; border: 1px dashed #B8962E !important; border-radius: 8px !important; }
+.empire-loading::before { content: "⚖️"; margin-right: 0.75rem !important; font-size: 1.4rem !important; }
 
-/* === ИНФОРМАЦИОННЫЕ БЛОКИ === */
-.info-box {
-    background: linear-gradient(135deg, #1a233a 0%, #0e1117 100%);
-    border-left: 4px solid #D4AF37;
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
-}
-.info-box-title {
-    color: #D4AF37;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    font-size: 1rem;
-}
-.info-box-text {
-    color: #fafafa;
-    font-size: 0.9rem;
-    line-height: 1.6;
-}
-
-/* === МОБИЛЬНАЯ АДАПТАЦИЯ (ANDROID/IPHONE) === */
 @media (max-width: 768px) {
-    /* Убираем лишние отступы */
     .main > div { padding: 0 !important; }
     .block-container { padding: 0.5rem 1rem !important; max-width: 100% !important; }
-    
-    /* Заголовки меньше */
     h1 { font-size: 1.4rem !important; }
-    h2 { font-size: 1.2rem !important; }
-    h3 { font-size: 1rem !important; }
-    
-    /* Кнопки — большие для пальцев */
-    .stButton>button { 
-        font-size: 18px !important; 
-        padding: 16px 32px !important; 
-        min-height: 60px !important; 
-        border-radius: 12px !important;
-        width: 100% !important;
-    }
-    
-    /* Поля ввода — крупный текст, чтобы не приближать */
-    .stTextArea textarea, .stTextInput input { 
-        font-size: 18px !important; 
-        padding: 14px !important;
-        min-height: 150px !important;
-    }
-    
-    /* Радио-кнопки — вертикально, крупные */
+    .stButton>button { font-size: 18px !important; padding: 16px 32px !important; min-height: 60px !important; border-radius: 12px !important; width: 100% !important; }
+    .stTextArea textarea, .stTextInput input { font-size: 18px !important; padding: 14px !important; min-height: 150px !important; }
     .stRadio > div { flex-direction: column !important; gap: 8px !important; }
-    .stRadio label { 
-        width: 100% !important; 
-        padding: 14px !important; 
-        margin: 4px 0 !important;
-        border-radius: 8px !important;
-        background: #262730 !important;
-        min-height: 50px !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-    .stRadio [role="radio"] { 
-        min-width: 24px !important; 
-        min-height: 24px !important; 
-    }
-    
-    /* Колонки — одна под другой */
-    .stColumns > div { 
-        width: 100% !important; 
-        margin-bottom: 12px !important; 
-    }
-    
-    /* Вкладки — крупные */
-    .stTabs [data-baseweb="tab-list"] { 
-        gap: 8px !important;
-        font-size: 16px !important;
-    }
-    .stTabs [data-baseweb="tab"] { 
-        padding: 12px 20px !important;
-        min-height: 50px !important;
-    }
-    
-    /* Скрываем сайдбар на мобильных */
+    .stRadio label { width: 100% !important; padding: 14px !important; margin: 4px 0 !important; border-radius: 8px !important; background: #262730 !important; min-height: 50px !important; display: flex !important; align-items: center !important; }
+    .stColumns > div { width: 100% !important; margin-bottom: 12px !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-    
-    /* Предотвращаем горизонтальный скролл */
-    body { overflow-x: hidden !important; }
-    div[data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
 }
-
-/* === ANDROID СПЕЦИФИЧНО === */
 @media (max-width: 480px) {
     .block-container { padding: 0.5rem !important; }
     h1 { font-size: 1.3rem !important; }
     .stButton>button { font-size: 17px !important; padding: 18px 24px !important; }
-    .stTextArea textarea, .stTextInput input { font-size: 17px !important; }
 }
-
-/* === IPHONE БЕЗОПАСНЫЕ ЗОНЫ === */
 @supports (padding: max(0px)) {
     @media (max-width: 768px) {
-        .main > div {
-            padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
-            padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
-            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
-        }
+        .main > div { padding-left: max(0.5rem, env(safe-area-inset-left)) !important; padding-right: max(0.5rem, env(safe-area-inset-right)) !important; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important; }
     }
 }
-
-/* === TOUCH-FRIENDLY (ПАЛЬЦЫ) === */
 @media (hover: none) and (pointer: coarse) {
-    .stButton>button {
-        min-height: 60px !important;
-        min-width: 120px !important;
-        touch-action: manipulation !important;
-    }
-    .stRadio label {
-        min-height: 55px !important;
-        touch-action: manipulation !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        min-height: 55px !important;
-    }
+    .stButton>button { min-height: 60px !important; min-width: 120px !important; touch-action: manipulation !important; }
+    .stRadio label { min-height: 55px !important; touch-action: manipulation !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -267,44 +129,45 @@ st.title("⚖️ Context.Pro Legal")
 st.caption("Анализ договоров • Консультации • РФ/РБ")
 
 # =============================================================================
-# 📋 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО ПОСЕЩЕНИЯ
+# 📋 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО ПОСЕЩЕНИЯ (ИСПРАВЛЕННАЯ)
 # =============================================================================
 if st.session_state.first_visit:
-    st.markdown("""
-    <div class="info-box">
-        <div class="info-box-title">📖 Как пользоваться Context.Pro Legal</div>
-        <div class="info-box-text">
-        <p><strong>1️⃣ Выберите юрисдикцию</strong> (обязательно!):</p>
-        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-            <li>🇷🇺 <strong>РФ</strong> — для договоров и вопросов по российскому праву</li>
-            <li>🇧🇾 <strong>РБ</strong> — для договоров и вопросов по праву Беларуси</li>
-        </ul>
-        <p style="margin-top: 0.5rem;"><strong>⚠️ Важно:</strong> Анализ зависит от выбранной юрисдикции! Если договор российский — выбирайте РФ, если белорусский — РБ.</p>
-        
-        <p style="margin-top: 1rem;"><strong>2️⃣ Выберите вкладку:</strong></p>
-        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-            <li>📋 <strong>Договор</strong> — вставьте текст договора для анализа рисков</li>
-            <li>💬 <strong>Вопрос</strong> — задайте юридический вопрос</li>
-        </ul>
-        
-        <p style="margin-top: 1rem;"><strong>3️⃣ Вставьте текст</strong> (минимум 50 символов для договора, 10 для вопроса)</p>
-        
-        <p style="margin-top: 1rem;"><strong>4️⃣ Нажмите кнопку</strong> и получите результат через 10-30 секунд</p>
-        
-        <p style="margin-top: 1rem; color: #D4AF37;"><strong>⚖️ Конфиденциально:</strong> Ваши данные не сохраняются и не передаются третьим лицам.</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 📖 Как пользоваться Context.Pro Legal")
     
-    # Кнопка "Я понял"
-    if st.button("✅ Я понял, начать работу", key="first_visit_done", use_container_width=True):
+    with st.container():
+        st.markdown("**1️⃣ Выберите юрисдикцию** (обязательно!):")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info("🇷🇺 **РФ**\n\nДля договоров и вопросов по российскому праву")
+        with col2:
+            st.info("🇧🇾 **РБ**\n\nДля договоров и вопросов по праву Беларуси")
+        st.warning("⚠️ **Важно:** Анализ зависит от выбранной юрисдикции! Если договор российский — выбирайте РФ, если белорусский — РБ.")
+    
+    st.markdown("**2️⃣ Выберите вкладку:**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.success("📋 **Договор**\n\nВставьте текст договора для анализа рисков")
+    with col2:
+        st.success("💬 **Вопрос**\n\nЗадайте юридический вопрос")
+    
+    st.markdown("**3️⃣ Вставьте текст**")
+    st.caption("• Минимум 50 символов для договора")
+    st.caption("• Минимум 10 символов для вопроса")
+    
+    st.markdown("**4️⃣ Нажмите кнопку** и получите результат через 10-30 секунд")
+    
+    st.markdown("---")
+    st.markdown("*⚖️ **Конфиденциально:** Ваши данные не сохраняются и не передаются третьим лицам.*")
+    
+    st.markdown("---")
+    if st.button("✅ Я понял, начать работу", key="first_visit_done", use_container_width=True, type="primary"):
         st.session_state.first_visit = False
         st.rerun()
     
     st.markdown("---")
 
 # =============================================================================
-# ⚖️ ЮРИСДИКЦИЯ (С ПОДСКАЗКОЙ)
+# ⚖️ ЮРИСДИКЦИЯ
 # =============================================================================
 st.markdown("### ⚖️ Юрисдикция")
 st.caption("📌 Выберите законодательство — от этого зависит анализ!")
@@ -312,13 +175,12 @@ st.caption("📌 Выберите законодательство — от эт
 jur = st.radio(
     "Выберите законодательство:",
     ["🇷🇺 РФ — Российская Федерация", "🇧🇾 РБ — Республика Беларусь"],
-    horizontal=False,  # Вертикально на мобильных — удобнее
+    horizontal=False,
     index=0,
     key="jurisdiction_radio",
     label_visibility="collapsed",
-    help="🇷🇺 РФ — ГК РФ, ФЗ, практика ВС РФ\n🇧🇾 РБ — ГК РБ, Декреты, практика ВС РБ"
+    help="🇷🇺 РФ — ГК РФ, ФЗ, практика ВС РФ | 🇧🇾 РБ — ГК РБ, Декреты, практика ВС РБ"
 )
-# Извлекаем только флаг и аббревиатуру для промпта
 st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
 st.markdown("---")
 
@@ -334,37 +196,14 @@ with tab1:
     st.markdown("#### 📄 Текст договора")
     st.caption("💡 Скопируйте текст из PDF, Word или фото")
     
-    # Подсказка как скопировать текст
-    with st.expander("📋 Как скопировать текст из документа?"):
-        st.markdown("""
-        **📱 С телефона (Android/iPhone):**
-        1. Откройте фото/скриншот договора
-        2. **iPhone:** зажмите текст → «Копировать текст»
-        3. **Android:** Google Lens → «Копировать текст»
-        4. Вставьте в поле ниже
-        
-        **💻 С компьютера:**
-        1. Откройте PDF или Word
-        2. Выделите текст → Ctrl+C (Cmd+C на Mac)
-        3. Вставьте → Ctrl+V
-        """)
+    with st.expander("📋 Как скопировать текст?"):
+        st.markdown("**📱 С телефона:**\n• iPhone: зажмите текст → «Копировать текст»\n• Android: Google Lens → «Копировать текст»\n• Вставьте в поле ниже")
+        st.markdown("**💻 С компьютера:**\n• Откройте документ → Выделите текст → Ctrl+C → Вставьте сюда")
     
-    contract_text = st.text_area(
-        "Текст договора:",
-        value=st.session_state.contract_txt,
-        height=250,
-        key="contract_text_input",
-        placeholder="Вставьте текст договора сюда... (минимум 50 символов)"
-    )
+    contract_text = st.text_area("Текст договора:", value=st.session_state.contract_txt, height=250, key="contract_text_input", placeholder="Вставьте текст договора... (мин. 50 символов)")
     st.session_state.contract_txt = contract_text
     
-    analyze_btn = st.button(
-        "⚖️ Проверить договор", 
-        use_container_width=True, 
-        type="primary",
-        key="btn_contract",
-        disabled=st.session_state.is_analyzing or not (contract_text.strip() if contract_text else False)
-    )
+    analyze_btn = st.button("⚖️ Проверить договор", use_container_width=True, type="primary", key="btn_contract", disabled=st.session_state.is_analyzing or not (contract_text.strip() if contract_text else False))
     
     if st.button("🗑️ Очистить", key="clear_contract"):
         st.session_state.contract_txt = ""
@@ -372,7 +211,6 @@ with tab1:
         st.session_state.last_mode = None
         st.rerun()
     
-    # ОБРАБОТКА
     if analyze_btn and contract_text and contract_text.strip():
         is_valid, message = validate_input(contract_text, "contract")
         if not is_valid:
@@ -391,19 +229,11 @@ with tab1:
                 st.success("✅ Готово!")
                 st.rerun()
     
-    # Результат
     if st.session_state.last_mode == "contract" and st.session_state.result:
         st.markdown("---")
         st.markdown("### 🔍 Результаты анализа")
         st.markdown(st.session_state.result)
-        st.download_button(
-            "📥 Скачать отчёт",
-            st.session_state.result,
-            "analysis.txt",
-            "text/plain",
-            use_container_width=True,
-            key="download_contract"
-        )
+        st.download_button("📥 Скачать отчёт", st.session_state.result, "analysis.txt", "text/plain", use_container_width=True, key="download_contract")
 
 # =============================================================================
 # ВКЛАДКА 2: ВОПРОС
@@ -412,22 +242,10 @@ with tab2:
     st.markdown("#### ⚖️ Ваш вопрос")
     st.caption("💡 Минимум 10 символов")
     
-    q = st.text_area(
-        "Вопрос:",
-        value=st.session_state.question_txt,
-        height=250,
-        key="question_input",
-        placeholder="Например: Какие риски по ст. 651 ГК РФ? (минимум 10 символов)"
-    )
+    q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=250, key="question_input", placeholder="Например: Какие риски по ст. 651 ГК РФ?")
     st.session_state.question_txt = q
     
-    ask_btn = st.button(
-        "⚡ Получить ответ", 
-        use_container_width=True, 
-        type="primary",
-        key="btn_question",
-        disabled=st.session_state.is_analyzing or not (q.strip() if q else False)
-    )
+    ask_btn = st.button("⚡ Получить ответ", use_container_width=True, type="primary", key="btn_question", disabled=st.session_state.is_analyzing or not (q.strip() if q else False))
     
     if st.button("🗑️ Очистить", key="clear_question"):
         st.session_state.question_txt = ""
