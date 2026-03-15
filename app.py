@@ -6,11 +6,10 @@ st.set_page_config(
     page_title="Context.Pro Legal — AI-анализ договоров",
     page_icon="⚖️",
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items=None
+    initial_sidebar_state="expanded"
 )
 
-# Скрываем стандартные элементы Streamlit для "приложения"
+# Скрываем стандартные элементы Streamlit для вида "приложения"
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -18,7 +17,7 @@ hide_streamlit_style = """
     .stAppDeployButton {visibility: hidden;}
     header {visibility: hidden;}
     </style>
-    <!-- PWA Manifest -->
+    <!-- PWA Manifest (встроенный) -->
     <link rel="manifest" href="data:application/manifest+json,{
         &quot;name&quot;: &quot;Context.Pro Legal&quot;,
         &quot;short_name&quot;: &quot;ContextPro&quot;,
@@ -58,10 +57,11 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 📱 Приложение")
+    # ИСПРАВЛЕНИЕ ЗДЕСЬ: убран параметр icon
     st.caption("📲 Нажми «Поделиться» → «На экран Домой»")
     
     st.markdown("---")
-    st.markdown("[📄 Политика конфиденциальности](#)", help="Страница в разработке")
+    st.markdown("[📄 Политика конфиденциальности](#)")
 
 # === ОСНОВНОЙ КОНТЕНТ ===
 st.title("⚖️ Проверь договор за 30 секунд")
@@ -115,16 +115,13 @@ if st.button("🔍 Проанализировать договор", type="prima
     else:
         with st.spinner("🤖 ИИ анализирует документ... Это займёт ~15-30 секунд"):
             # === ЗДЕСЬ ТВОЯ ЛОГИКА АНАЛИЗА ===
-            # Пример вызова LLM API (раскомментируй и адаптируй под свою модель):
-            # response = call_your_llm(contract_text, user_question, jurisdiction)
-            
-            # Имитация задержки для демонстрации (удали в продакшене!)
+            # Пока стоит имитация задержки. Когда подключишь API - замени этот блок.
             time.sleep(2)
             
             # === РЕЗУЛЬТАТ ===
             st.success("✅ Анализ завершён!")
             
-            # Блок с рисками (красный)
+            # Блок с рисками
             with st.expander("🔴 Найденные риски", expanded=True):
                 st.markdown("""
                 - **Пункт 5.2**: Штраф 50% от суммы договора — выше среднего по рынку
@@ -132,7 +129,7 @@ if st.button("🔍 Проанализировать договор", type="prima
                 - **Отсутствует**: Порядок возврата аванса при расторжении
                 """)
             
-            # Блок с рекомендациями (зелёный)
+            # Блок с рекомендациями
             with st.expander("🟢 Рекомендации по правкам"):
                 st.markdown("""
                 1. Предложите снизить штраф до 10-20%
@@ -140,7 +137,7 @@ if st.button("🔍 Проанализировать договор", type="prima
                 3. Внесите условие возврата аванса в течение 10 дней
                 """)
             
-            # Блок с ответом на вопрос
+            # Ответ на вопрос
             st.markdown(f"### 💬 Ответ на вопрос: *«{user_question}»*")
             st.markdown(f"""
             На основе анализа договора и законодательства **{jurisdiction}**, ИИ рекомендует:
@@ -149,7 +146,7 @@ if st.button("🔍 Проанализировать договор", type="prima
             ⚠️ **Важно**: Это автоматический анализ. Для юридически значимых выводов обратитесь к сертифицированному юристу.
             """)
             
-            # Кнопка "Скачать отчёт"
+            # Кнопка скачать
             st.download_button(
                 label="📥 Скачать отчёт (демо)",
                 data="Контекст: " + jurisdiction + "\n\nВопрос: " + user_question + "\n\n[Здесь будет сформированный отчет]",
