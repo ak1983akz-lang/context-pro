@@ -4,6 +4,33 @@ import re
 import os
 
 # =============================================================================
+# 📱 PWA MANIFEST (для установки как приложения)
+# =============================================================================
+pwa_manifest = """
+<link rel="manifest" href="application/manifest+json,{
+    &quot;name&quot;: &quot;Context.Pro Legal&quot;,
+    &quot;short_name&quot;: &quot;ContextPro&quot;,
+    &quot;description&quot;: &quot;AI-анализ договоров РФ и РБ&quot;,
+    &quot;start_url&quot;: &quot;/&quot;,
+    &quot;display&quot;: &quot;standalone&quot;,
+    &quot;background_color&quot;: &quot;#0e1117&quot;,
+    &quot;theme_color&quot;: &quot;#1f77b4&quot;,
+    &quot;orientation&quot;: &quot;portrait&quot;,
+    &quot;icons&quot;: [{
+        &quot;src&quot;: &quot;https://cdn-icons-png.flaticon.com/512/3094/3094427.png&quot;,
+        &quot;sizes&quot;: &quot;512x512&quot;,
+        &quot;type&quot;: &quot;image/png&quot;
+    }]
+}">
+<meta name="theme-color" content="#1f77b4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Context.Pro">
+<link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3094/3094427.png">
+"""
+st.markdown(pwa_manifest, unsafe_allow_html=True)
+
+# =============================================================================
 # SESSION STATE
 # =============================================================================
 for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction', 'first_visit']:
