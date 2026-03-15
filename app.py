@@ -10,50 +10,179 @@ for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode
     if key not in st.session_state:
         st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None if key == 'last_mode' else True if key == 'first_visit' else False
 
-# =============================================================================
-# 📱 CSS — УЛУЧШЕННАЯ АДАПТАЦИЯ
-# =============================================================================
-st.markdown("""
 <style>
-.stApp { background: #0e1117; color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-.stTextArea textarea { background: #262730; color: #fafafa; font-size: 16px !important; line-height: 1.5 !important; }
-.stButton>button { background: #1f77b4; color: white; font-size: 16px !important; padding: 12px 24px !important; min-height: 50px !important; border-radius: 8px !important; }
-h1 { font-size: 1.8rem !important; margin-bottom: 0.5rem !important; }
+.stApp { 
+    background: #0e1117; 
+    color: #fafafa; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding-top: 1rem !important; /* Отступ сверху для мобильных */
+}
+.stTextArea textarea { 
+    background: #262730; 
+    color: #fafafa; 
+    font-size: 16px !important; 
+    line-height: 1.5 !important;
+}
+.stButton>button { 
+    background: #1f77b4; 
+    color: white; 
+    font-size: 16px !important; 
+    padding: 12px 24px !important; 
+    min-height: 50px !important; 
+    border-radius: 8px !important;
+}
+
+/* Заголовки — адаптивные */
+h1 { 
+    font-size: 1.8rem !important; 
+    margin-bottom: 0.5rem !important; 
+    margin-top: 0.5rem !important;
+}
 h2 { font-size: 1.4rem !important; }
 h3 { font-size: 1.2rem !important; }
+h4 { font-size: 1rem !important; }
 
-@keyframes empire-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(0.98); } }
-.empire-loading { display: flex !important; align-items: center !important; justify-content: center !important; color: #D4AF37 !important; font-weight: 500 !important; font-size: 1rem !important; animation: empire-pulse 2s infinite ease-in-out !important; padding: 1.5rem !important; margin: 1rem 0 !important; background: #1a233a !important; border: 1px dashed #B8962E !important; border-radius: 8px !important; }
-.empire-loading::before { content: "⚖️"; margin-right: 0.75rem !important; font-size: 1.4rem !important; }
+/* Спинер */
+@keyframes empire-pulse { 
+    0%, 100% { opacity: 1; transform: scale(1); } 
+    50% { opacity: 0.7; transform: scale(0.98); } 
+}
+.empire-loading { 
+    display: flex !important; 
+    align-items: center !important; 
+    justify-content: center !important; 
+    color: #D4AF37 !important; 
+    font-weight: 500 !important; 
+    font-size: 1rem !important; 
+    animation: empire-pulse 2s infinite ease-in-out !important; 
+    padding: 1.5rem !important; 
+    margin: 1rem 0 !important; 
+    background: #1a233a !important; 
+    border: 1px dashed #B8962E !important; 
+    border-radius: 8px !important;
+}
+.empire-loading::before { 
+    content: "⚖️"; 
+    margin-right: 0.75rem !important; 
+    font-size: 1.4rem !important; 
+}
 
+/* === МОБИЛЬНАЯ АДАПТАЦИЯ === */
 @media (max-width: 768px) {
+    /* Убираем лишние отступы Streamlit */
     .main > div { padding: 0 !important; }
-    .block-container { padding: 0.5rem 1rem !important; max-width: 100% !important; }
-    h1 { font-size: 1.4rem !important; }
-    .stButton>button { font-size: 18px !important; padding: 16px 32px !important; min-height: 60px !important; border-radius: 12px !important; width: 100% !important; }
-    .stTextArea textarea, .stTextInput input { font-size: 18px !important; padding: 14px !important; min-height: 150px !important; }
-    .stRadio > div { flex-direction: column !important; gap: 8px !important; }
-    .stRadio label { width: 100% !important; padding: 14px !important; margin: 4px 0 !important; border-radius: 8px !important; background: #262730 !important; min-height: 50px !important; display: flex !important; align-items: center !important; }
-    .stColumns > div { width: 100% !important; margin-bottom: 12px !important; }
+    
+    /* Контейнер с правильными отступами */
+    .block-container { 
+        padding: 1rem 1rem 0.5rem 1rem !important; 
+        max-width: 100% !important;
+        padding-top: max(1rem, env(safe-area-inset-top)) !important; /* Учёт "чёлки" */
+    }
+    
+    /* Заголовки меньше на мобильных */
+    h1 { font-size: 1.3rem !important; margin-top: 0.3rem !important; }
+    h2 { font-size: 1.1rem !important; }
+    h3 { font-size: 1rem !important; }
+    h4 { font-size: 0.9rem !important; }
+    
+    /* Caption меньше */
+    .stMarkdown p { font-size: 0.85rem !important; }
+    
+    /* Кнопки — большие для пальцев */
+    .stButton>button { 
+        font-size: 16px !important; 
+        padding: 14px 24px !important; 
+        min-height: 55px !important; 
+        border-radius: 10px !important;
+        width: 100% !important;
+        margin: 0.2rem 0 !important;
+    }
+    
+    /* Поля ввода */
+    .stTextArea textarea, .stTextInput input { 
+        font-size: 16px !important; 
+        padding: 12px !important;
+        min-height: 120px !important;
+    }
+    
+    /* Радио-кнопки вертикально */
+    .stRadio > div { 
+        flex-direction: column !important; 
+        gap: 6px !important; 
+    }
+    .stRadio label { 
+        width: 100% !important; 
+        padding: 12px !important; 
+        margin: 3px 0 !important;
+        border-radius: 8px !important;
+        background: #262730 !important;
+        min-height: 48px !important;
+        display: flex !important;
+        align-items: center !important;
+        font-size: 0.95rem !important;
+    }
+    
+    /* Колонки */
+    .stColumns > div { 
+        width: 100% !important; 
+        margin-bottom: 10px !important; 
+    }
+    
+    /* Вкладки */
+    .stTabs [data-baseweb="tab-list"] { 
+        gap: 4px !important;
+        font-size: 14px !important;
+        padding: 0 !important;
+    }
+    .stTabs [data-baseweb="tab"] { 
+        padding: 10px 16px !important;
+        min-height: 45px !important;
+    }
+    
+    /* Скрываем сайдбар */
     section[data-testid="stSidebar"] { display: none !important; }
+    
+    /* Убираем горизонтальный скролл */
+    body { overflow-x: hidden !important; max-width: 100vw !important; }
+    div[data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
 }
+
+/* Маленькие телефоны (до 480px) */
 @media (max-width: 480px) {
-    .block-container { padding: 0.5rem !important; }
-    h1 { font-size: 1.3rem !important; }
-    .stButton>button { font-size: 17px !important; padding: 18px 24px !important; }
+    .block-container { padding: 0.8rem 0.8rem 0.5rem 0.8rem !important; }
+    h1 { font-size: 1.2rem !important; }
+    h2 { font-size: 1rem !important; }
+    h3 { font-size: 0.95rem !important; }
+    .stButton>button { font-size: 15px !important; padding: 16px 20px !important; }
+    .stTextArea textarea, .stTextInput input { font-size: 15px !important; }
+    .stRadio label { font-size: 0.9rem !important; padding: 10px !important; }
 }
+
+/* iPhone safe areas */
 @supports (padding: max(0px)) {
     @media (max-width: 768px) {
-        .main > div { padding-left: max(0.5rem, env(safe-area-inset-left)) !important; padding-right: max(0.5rem, env(safe-area-inset-right)) !important; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important; }
+        .block-container {
+            padding-top: max(1rem, env(safe-area-inset-top)) !important;
+            padding-left: max(1rem, env(safe-area-inset-left)) !important;
+            padding-right: max(1rem, env(safe-area-inset-right)) !important;
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+        }
     }
 }
+
+/* Touch-friendly */
 @media (hover: none) and (pointer: coarse) {
-    .stButton>button { min-height: 60px !important; min-width: 120px !important; touch-action: manipulation !important; }
-    .stRadio label { min-height: 55px !important; touch-action: manipulation !important; }
+    .stButton>button {
+        min-height: 55px !important;
+        min-width: 100px !important;
+        touch-action: manipulation !important;
+    }
+    .stRadio label {
+        min-height: 50px !important;
+        touch-action: manipulation !important;
+    }
 }
 </style>
-""", unsafe_allow_html=True)
-
 # =============================================================================
 # 🔒 ВАЛИДАЦИЯ
 # =============================================================================
