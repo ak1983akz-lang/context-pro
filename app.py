@@ -6,44 +6,188 @@ import os
 # =============================================================================
 # SESSION STATE
 # =============================================================================
-for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction']:
+for key in ['contract_txt', 'question_txt', 'result', 'is_analyzing', 'last_mode', 'jurisdiction', 'first_visit']:
     if key not in st.session_state:
-        st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False
+        st.session_state[key] = "" if key in ['contract_txt', 'question_txt', 'result', 'jurisdiction'] else False if key == 'is_analyzing' else None if key == 'last_mode' else True if key == 'first_visit' else False
 
 # =============================================================================
-# 📱 CSS — МОБИЛЬНАЯ АДАПТАЦИЯ
+# 📱 CSS — УЛУЧШЕННАЯ АДАПТАЦИЯ ПОД ANDROID/IPHONE
 # =============================================================================
 st.markdown("""
 <style>
-.stApp { background: #0e1117; color: #fafafa; }
-.stTextArea textarea { background: #262730; color: #fafafa; font-size: 16px !important; }
-.stButton>button { background: #1f77b4; color: white; font-size: 16px !important; padding: 12px 24px !important; min-height: 50px !important; }
-h1 { font-size: 1.8rem !important; }
+/* === БАЗОВЫЕ СТИЛИ === */
+.stApp { 
+    background: #0e1117; 
+    color: #fafafa; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+.stTextArea textarea { 
+    background: #262730; 
+    color: #fafafa; 
+    font-size: 16px !important; 
+    line-height: 1.5 !important;
+}
+.stButton>button { 
+    background: #1f77b4; 
+    color: white; 
+    font-size: 16px !important; 
+    padding: 12px 24px !important; 
+    min-height: 50px !important;
+    border-radius: 8px !important;
+}
+
+/* === ЗАГОЛОВКИ === */
+h1 { font-size: 1.8rem !important; margin-bottom: 0.5rem !important; }
 h2 { font-size: 1.4rem !important; }
 h3 { font-size: 1.2rem !important; }
+h4 { font-size: 1rem !important; }
 
+/* === СПИНЕР === */
 @keyframes empire-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.7; transform: scale(0.98); }
 }
 .empire-loading {
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    color: #D4AF37 !important; font-weight: 500 !important; font-size: 1rem !important;
+    display: flex !important; 
+    align-items: center !important; 
+    justify-content: center !important;
+    color: #D4AF37 !important; 
+    font-weight: 500 !important; 
+    font-size: 1rem !important;
     animation: empire-pulse 2s infinite ease-in-out !important;
-    padding: 1.5rem !important; margin: 1rem 0 !important;
-    background: #1a233a !important; border: 1px dashed #B8962E !important; border-radius: 8px !important;
+    padding: 1.5rem !important; 
+    margin: 1rem 0 !important;
+    background: #1a233a !important; 
+    border: 1px dashed #B8962E !important; 
+    border-radius: 8px !important;
 }
-.empire-loading::before { content: "⚖️"; margin-right: 0.75rem !important; font-size: 1.4rem !important; }
+.empire-loading::before { 
+    content: "⚖️"; 
+    margin-right: 0.75rem !important; 
+    font-size: 1.4rem !important; 
+}
 
+/* === ИНФОРМАЦИОННЫЕ БЛОКИ === */
+.info-box {
+    background: linear-gradient(135deg, #1a233a 0%, #0e1117 100%);
+    border-left: 4px solid #D4AF37;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+.info-box-title {
+    color: #D4AF37;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+.info-box-text {
+    color: #fafafa;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+/* === МОБИЛЬНАЯ АДАПТАЦИЯ (ANDROID/IPHONE) === */
 @media (max-width: 768px) {
-    .main > div { padding: 0.5rem !important; }
-    .block-container { padding: 0.5rem 1rem !important; }
-    h1 { font-size: 1.5rem !important; }
-    .stButton>button { font-size: 18px !important; padding: 15px 30px !important; min-height: 55px !important; border-radius: 10px !important; }
-    .stTextArea textarea, .stTextInput input { font-size: 18px !important; padding: 12px !important; }
-    .stRadio > div { flex-direction: column !important; }
-    .stRadio label { width: 100% !important; padding: 10px !important; margin: 5px 0 !important; }
-    .stColumns > div { width: 100% !important; margin-bottom: 10px !important; }
+    /* Убираем лишние отступы */
+    .main > div { padding: 0 !important; }
+    .block-container { padding: 0.5rem 1rem !important; max-width: 100% !important; }
+    
+    /* Заголовки меньше */
+    h1 { font-size: 1.4rem !important; }
+    h2 { font-size: 1.2rem !important; }
+    h3 { font-size: 1rem !important; }
+    
+    /* Кнопки — большие для пальцев */
+    .stButton>button { 
+        font-size: 18px !important; 
+        padding: 16px 32px !important; 
+        min-height: 60px !important; 
+        border-radius: 12px !important;
+        width: 100% !important;
+    }
+    
+    /* Поля ввода — крупный текст, чтобы не приближать */
+    .stTextArea textarea, .stTextInput input { 
+        font-size: 18px !important; 
+        padding: 14px !important;
+        min-height: 150px !important;
+    }
+    
+    /* Радио-кнопки — вертикально, крупные */
+    .stRadio > div { flex-direction: column !important; gap: 8px !important; }
+    .stRadio label { 
+        width: 100% !important; 
+        padding: 14px !important; 
+        margin: 4px 0 !important;
+        border-radius: 8px !important;
+        background: #262730 !important;
+        min-height: 50px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    .stRadio [role="radio"] { 
+        min-width: 24px !important; 
+        min-height: 24px !important; 
+    }
+    
+    /* Колонки — одна под другой */
+    .stColumns > div { 
+        width: 100% !important; 
+        margin-bottom: 12px !important; 
+    }
+    
+    /* Вкладки — крупные */
+    .stTabs [data-baseweb="tab-list"] { 
+        gap: 8px !important;
+        font-size: 16px !important;
+    }
+    .stTabs [data-baseweb="tab"] { 
+        padding: 12px 20px !important;
+        min-height: 50px !important;
+    }
+    
+    /* Скрываем сайдбар на мобильных */
+    section[data-testid="stSidebar"] { display: none !important; }
+    
+    /* Предотвращаем горизонтальный скролл */
+    body { overflow-x: hidden !important; }
+    div[data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
+}
+
+/* === ANDROID СПЕЦИФИЧНО === */
+@media (max-width: 480px) {
+    .block-container { padding: 0.5rem !important; }
+    h1 { font-size: 1.3rem !important; }
+    .stButton>button { font-size: 17px !important; padding: 18px 24px !important; }
+    .stTextArea textarea, .stTextInput input { font-size: 17px !important; }
+}
+
+/* === IPHONE БЕЗОПАСНЫЕ ЗОНЫ === */
+@supports (padding: max(0px)) {
+    @media (max-width: 768px) {
+        .main > div {
+            padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
+            padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+        }
+    }
+}
+
+/* === TOUCH-FRIENDLY (ПАЛЬЦЫ) === */
+@media (hover: none) and (pointer: coarse) {
+    .stButton>button {
+        min-height: 60px !important;
+        min-width: 120px !important;
+        touch-action: manipulation !important;
+    }
+    .stRadio label {
+        min-height: 55px !important;
+        touch-action: manipulation !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        min-height: 55px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -120,21 +264,62 @@ def query_ai(system_prompt: str, user_text: str):
 # 🎨 UI — ШАПКА
 # =============================================================================
 st.title("⚖️ Context.Pro Legal")
-st.caption("Анализ договоров • РФ/РБ")
+st.caption("Анализ договоров • Консультации • РФ/РБ")
 
 # =============================================================================
-# ⚖️ ЮРИСДИКЦИЯ
+# 📋 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО ПОСЕЩЕНИЯ
+# =============================================================================
+if st.session_state.first_visit:
+    st.markdown("""
+    <div class="info-box">
+        <div class="info-box-title">📖 Как пользоваться Context.Pro Legal</div>
+        <div class="info-box-text">
+        <p><strong>1️⃣ Выберите юрисдикцию</strong> (обязательно!):</p>
+        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+            <li>🇷🇺 <strong>РФ</strong> — для договоров и вопросов по российскому праву</li>
+            <li>🇧🇾 <strong>РБ</strong> — для договоров и вопросов по праву Беларуси</li>
+        </ul>
+        <p style="margin-top: 0.5rem;"><strong>⚠️ Важно:</strong> Анализ зависит от выбранной юрисдикции! Если договор российский — выбирайте РФ, если белорусский — РБ.</p>
+        
+        <p style="margin-top: 1rem;"><strong>2️⃣ Выберите вкладку:</strong></p>
+        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+            <li>📋 <strong>Договор</strong> — вставьте текст договора для анализа рисков</li>
+            <li>💬 <strong>Вопрос</strong> — задайте юридический вопрос</li>
+        </ul>
+        
+        <p style="margin-top: 1rem;"><strong>3️⃣ Вставьте текст</strong> (минимум 50 символов для договора, 10 для вопроса)</p>
+        
+        <p style="margin-top: 1rem;"><strong>4️⃣ Нажмите кнопку</strong> и получите результат через 10-30 секунд</p>
+        
+        <p style="margin-top: 1rem; color: #D4AF37;"><strong>⚖️ Конфиденциально:</strong> Ваши данные не сохраняются и не передаются третьим лицам.</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Кнопка "Я понял"
+    if st.button("✅ Я понял, начать работу", key="first_visit_done", use_container_width=True):
+        st.session_state.first_visit = False
+        st.rerun()
+    
+    st.markdown("---")
+
+# =============================================================================
+# ⚖️ ЮРИСДИКЦИЯ (С ПОДСКАЗКОЙ)
 # =============================================================================
 st.markdown("### ⚖️ Юрисдикция")
+st.caption("📌 Выберите законодательство — от этого зависит анализ!")
+
 jur = st.radio(
     "Выберите законодательство:",
-    ["🇷🇺 РФ", "🇧🇾 РБ"],
-    horizontal=True,
+    ["🇷🇺 РФ — Российская Федерация", "🇧🇾 РБ — Республика Беларусь"],
+    horizontal=False,  # Вертикально на мобильных — удобнее
     index=0,
     key="jurisdiction_radio",
-    label_visibility="collapsed"
+    label_visibility="collapsed",
+    help="🇷🇺 РФ — ГК РФ, ФЗ, практика ВС РФ\n🇧🇾 РБ — ГК РБ, Декреты, практика ВС РБ"
 )
-st.session_state.jurisdiction = jur
+# Извлекаем только флаг и аббревиатуру для промпта
+st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
 st.markdown("---")
 
 # =============================================================================
@@ -143,25 +328,25 @@ st.markdown("---")
 tab1, tab2 = st.tabs(["📋 Договор", "💬 Вопрос"])
 
 # =============================================================================
-# ВКЛАДКА 1: ДОГОВОР (ТОЛЬКО ТЕКСТ — НАДЁЖНО)
+# ВКЛАДКА 1: ДОГОВОР
 # =============================================================================
 with tab1:
     st.markdown("#### 📄 Текст договора")
-    st.caption("💡 Скопируйте текст из PDF или фото")
+    st.caption("💡 Скопируйте текст из PDF, Word или фото")
     
     # Подсказка как скопировать текст
     with st.expander("📋 Как скопировать текст из документа?"):
         st.markdown("""
-        **С компьютера:**
-        1. Откройте договор (PDF, Word, фото)
-        2. Выделите текст мышкой → Ctrl+C (Cmd+C на Mac)
-        3. Вставьте сюда → Ctrl+V
-        
-        **С телефона:**
-        1. Откройте фото/скрин договора
-        2. На iPhone: зажмите текст → «Копировать текст»
-        3. На Android: Google Lens → «Копировать текст»
+        **📱 С телефона (Android/iPhone):**
+        1. Откройте фото/скриншот договора
+        2. **iPhone:** зажмите текст → «Копировать текст»
+        3. **Android:** Google Lens → «Копировать текст»
         4. Вставьте в поле ниже
+        
+        **💻 С компьютера:**
+        1. Откройте PDF или Word
+        2. Выделите текст → Ctrl+C (Cmd+C на Mac)
+        3. Вставьте → Ctrl+V
         """)
     
     contract_text = st.text_area(
@@ -169,7 +354,7 @@ with tab1:
         value=st.session_state.contract_txt,
         height=250,
         key="contract_text_input",
-        placeholder="Вставьте текст договора сюда..."
+        placeholder="Вставьте текст договора сюда... (минимум 50 символов)"
     )
     st.session_state.contract_txt = contract_text
     
@@ -196,7 +381,7 @@ with tab1:
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "contract"
             st.markdown('<div class="empire-loading">Анализирую...</div>', unsafe_allow_html=True)
-            sys_prompt = build_system_prompt(jur, "contract")
+            sys_prompt = build_system_prompt(st.session_state.jurisdiction, "contract")
             result, error = query_ai(sys_prompt, contract_text)
             st.session_state.is_analyzing = False
             if error:
@@ -209,7 +394,7 @@ with tab1:
     # Результат
     if st.session_state.last_mode == "contract" and st.session_state.result:
         st.markdown("---")
-        st.markdown("### 🔍 Результаты")
+        st.markdown("### 🔍 Результаты анализа")
         st.markdown(st.session_state.result)
         st.download_button(
             "📥 Скачать отчёт",
@@ -232,7 +417,7 @@ with tab2:
         value=st.session_state.question_txt,
         height=250,
         key="question_input",
-        placeholder="Например: Какие риски по ст. 651 ГК РФ?"
+        placeholder="Например: Какие риски по ст. 651 ГК РФ? (минимум 10 символов)"
     )
     st.session_state.question_txt = q
     
@@ -258,7 +443,7 @@ with tab2:
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "question"
             st.markdown('<div class="empire-loading">Готовлю ответ...</div>', unsafe_allow_html=True)
-            sys_prompt = build_system_prompt(jur, "question")
+            sys_prompt = build_system_prompt(st.session_state.jurisdiction, "question")
             result, error = query_ai(sys_prompt, q)
             st.session_state.is_analyzing = False
             if error:
@@ -270,7 +455,7 @@ with tab2:
     
     if st.session_state.last_mode == "question" and st.session_state.result:
         st.markdown("---")
-        st.markdown("### 💬 Ответ")
+        st.markdown("### 💬 Консультация")
         st.markdown(st.session_state.result)
 
 # =============================================================================
