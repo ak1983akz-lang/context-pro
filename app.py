@@ -4,6 +4,8 @@ import re
 import os
 import time
 import io
+import easyocr
+from PIL import Image
 
 # =============================================================================
 # 📱 PWA MANIFEST (для установки как приложения)
@@ -12,7 +14,7 @@ pwa_manifest = """
 <link rel="manifest" href="application/manifest+json,{
     &quot;name&quot;: &quot;Context.Pro Legal&quot;,
     &quot;short_name&quot;: &quot;ContextPro&quot;,
-    &quot;description&quot;: &quot;AI-анализ договоров РФ и РБ&quot;,
+    &quot;description&quot;: &quot;AI-анализ договоров РФ и РБ с OCR&quot;,
     &quot;start_url&quot;: &quot;/&quot;,
     &quot;display&quot;: &quot;standalone&quot;,
     &quot;background_color&quot;: &quot;#0e1117&quot;,
@@ -40,16 +42,62 @@ defaults = {
     'question_txt': "",
     'result': "",
     'is_analyzing': False,
+    'is_processing_ocr': False,
     'last_mode': None,
     'jurisdiction': "🇷🇺 РФ",
     'history': [],
     'show_rules': False,
-    'file_uploaded': False  # Флаг загрузки файла
+    'ocr_language': 'ru'
 }
 
 for key, val in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
+
+# =============================================================================
+# 📸 OCR ФУНКЦИЯ (распознавание текста с фото)
+# =============================================================================
+@st.cache_resource
+def get_ocr_reader():
+    """Инициализируем OCR читер один раз (кэшируем)"""
+    return easyocr.Reader(['ru', 'en'], gpu=False)
+
+def extract_text_from_image(uploaded_file):
+    """Извлекает текст из загруженного изображения"""
+    try:
+        # Открываем изображение
+        image = Image.open(uploaded_file)
+        
+        # Показываем прогресс
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        status_text.text("🔄 Загрузка OCR-движка...")
+        progress_bar.progress(20)
+        
+        # Инициализируем читер
+        reader = get_ocr_reader()
+        progress_bar.progress(40)
+        
+        status_text.text("🔍 Распознавание текста...")
+        progress_bar.progress(60)
+        
+        # Распознаём текст
+        results = reader.readtext(image, detail=0)
+        progress_bar.progress(80)
+        
+        # Объединяем результаты
+        text = "\n".join(results)
+        progress_bar.progress(100)
+        
+        time.sleep(0.5)
+        progress_bar.empty()
+        status_text.empty()
+        
+        return text.strip() if text.strip() else None
+        
+    except Exception as e:
+        return f"⚠️ Ошибка OCR: {str(e)}"
 
 # =============================================================================
 # 🔒 ВАЛИДАЦИЯ
@@ -187,6 +235,16 @@ h2, h3, h4 { color: #ddd; }
     animation: pulse-gold 1.5s infinite;
 }
 
+/* OCR статус */
+.ocr-success {
+    background: #1a3a2a; border: 1px solid #2d7a4e; color: #4ade80;
+    padding: 15px; border-radius: 8px; margin: 10px 0;
+}
+.ocr-processing {
+    background: #1a233a; border: 1px dashed #D4AF37; color: #D4AF37;
+    padding: 15px; border-radius: 8px; margin: 10px 0;
+}
+
 /* Мобильная адаптация */
 @media (max-width: 768px) {
     .block-container { padding-top: 1rem !important; }
@@ -204,7 +262,7 @@ h2, h3, h4 { color: #ddd; }
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     st.title("⚖️ Context.Pro Legal")
-    st.caption("Анализ договоров • Консультации • РФ/РБ")
+    st.caption("📸 Фото → Текст → Анализ")
 with col_h2:
     if st.button("❓ Правила", use_container_width=True, key="btn_rules_toggle"):
         st.session_state.show_rules = not st.session_state.show_rules
@@ -213,12 +271,12 @@ with col_h2:
 if st.session_state.show_rules:
     st.markdown("""
     <div class="rules-box">
-        <h3 style="margin-top:0;">📜 Правила сервиса</h3>
-        <div class="rule-item"><span class="rule-icon">1️⃣</span><span>Выберите юрисдикцию (РФ или РБ). Это критически важно для ссылок на законы.</span></div>
-        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Загрузите документ (TXT) или вставьте текст договора.</span></div>
-        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>Для PDF/фото: используйте распознавание текста на телефоне (Live Text / Google Lens), затем вставьте текст.</span></div>
-        <div class="rule-item"><span class="rule-icon">4️⃣</span><span>Нажмите «Анализировать». ИИ проверит риски за 15-30 секунд.</span></div>
-        <div class="rule-item"><span class="rule-icon">🔒</span><span>Ваши данные не сохраняются на сервере после завершения сессии.</span></div>
+        <h3 style="margin-top:0;">📜 Как пользоваться</h3>
+        <div class="rule-item"><span class="rule-icon">1️⃣</span><span>Выберите юрисдикцию (РФ или РБ)</span></div>
+        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Сфотографируйте документ или загрузите фото</span></div>
+        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>ИИ автоматически распознает текст с фото</span></div>
+        <div class="rule-item"><span class="rule-icon">4️⃣</span><span>Проверьте текст и нажмите «Анализировать»</span></div>
+        <div class="rule-item"><span class="rule-icon">🔒</span><span>Фото не сохраняются после обработки</span></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -236,74 +294,92 @@ st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 
 st.divider()
 
 # 4. ВКЛАДКИ
-tab_doc, tab_q = st.tabs(["📄 Анализ документа", "💬 Юридический вопрос"])
+tab_doc, tab_q = st.tabs(["📸 Фото документа", "💬 Юридический вопрос"])
 
-# --- ВКЛАДКА 1: ДОКУМЕНТ ---
+# --- ВКЛАДКА 1: ФОТО ДОКУМЕНТА ---
 with tab_doc:
-    st.markdown("#### 📤 Загрузка или ввод текста")
+    st.markdown("#### 📤 Загрузите фото документа")
     
-    # Загрузчик файлов
+    # Загрузчик изображений
     uploaded_file = st.file_uploader(
-        "Загрузить документ (TXT)", 
-        type=["txt"], 
-        help="Поддерживаются текстовые файлы .txt. Для PDF используйте копирование текста через телефон.",
-        key="file_uploader_contract"
+        "📷 Загрузить фото (JPG, PNG, HEIC)", 
+        type=["jpg", "jpeg", "png", "heic"], 
+        help="Сфотографируйте документ и загрузите фото. Текст будет распознан автоматически.",
+        key="file_uploader_ocr"
     )
     
-    # 🔧 ИСПРАВЛЕНИЕ: Логика обработки файла с автозаполнением
-    if uploaded_file is not None and not st.session_state.file_uploaded:
-        try:
-            file_text = uploaded_file.read().decode("utf-8")
-            st.session_state.contract_txt = file_text  # Записываем в сессию
-            st.session_state.file_uploaded = True  # Ставим флаг
-            st.success(f"✅ Загружено: {len(file_text)} символов")
-            st.rerun()  # Принудительно обновляем страницу для отображения текста
-        except Exception as e:
-            st.error(f"⚠️ Ошибка чтения файла: {str(e)}")
-    
-    # Сброс флага если файл убрали
-    if uploaded_file is None and st.session_state.file_uploaded:
-        st.session_state.file_uploaded = False
-    
-    # Подсказка для PDF и фото
-    with st.expander("📄 Как работать с PDF и фото документов?"):
-        st.markdown("""
-        **📱 С телефона (быстро):**
-        1. **iPhone:** Откройте фото/PDF → зажмите текст → «Копировать» (Live Text)
-        2. **Android:** Откройте фото → Google Lens → «Текст» → «Копировать»
-        3. Вставьте в поле ниже
+    # Обработка загруженного фото
+    if uploaded_file is not None:
+        # Показываем превью фото
+        col_preview1, col_preview2 = st.columns([1, 2])
+        with col_preview1:
+            st.image(uploaded_file, caption="📷 Загруженное фото", use_container_width=True)
         
-        **💻 С компьютера:**
-        1. Откройте PDF в браузере
-        2. Выделите текст → Ctrl+C
-        3. Вставьте в поле ниже
+        with col_preview2:
+            # Кнопка запуска OCR
+            if st.button("🔍 Распознать текст с фото", use_container_width=True, type="primary", disabled=st.session_state.is_processing_ocr):
+                st.session_state.is_processing_ocr = True
+                st.rerun()
         
-        **🔄 Или сохраните PDF как .txt** и загрузите через кнопку выше
-        """)
+        # Если идёт обработка OCR
+        if st.session_state.is_processing_ocr:
+            st.markdown('<div class="ocr-processing">🔄 Распознавание текста... Это займёт 10-30 секунд</div>', unsafe_allow_html=True)
+            
+            # Запускаем OCR
+            ocr_text = extract_text_from_image(uploaded_file)
+            
+            if ocr_text and not ocr_text.startswith("⚠️"):
+                st.session_state.contract_txt = ocr_text
+                st.session_state.is_processing_ocr = False
+                st.markdown('<div class="ocr-success">✅ Текст распознан! Проверьте и редактируйте при необходимости.</div>', unsafe_allow_html=True)
+                st.rerun()
+            else:
+                st.session_state.is_processing_ocr = False
+                st.error(ocr_text or "❌ Не удалось распознать текст. Попробуйте сделать фото чётче.")
     
-    # Поле ввода текста — ТЕПЕРЬ БЕРЕТ ЗНАЧЕНИЕ ИЗ SESSION_STATE
+    # Поле ввода текста (ручное редактирование после OCR)
     contract_text = st.text_area(
-        "Текст договора:", 
-        value=st.session_state.contract_txt,  # ← Ключевой момент
+        "📝 Распознанный текст (можно редактировать):", 
+        value=st.session_state.contract_txt, 
         height=300, 
         key="area_contract",
-        placeholder="Вставьте текст сюда или загрузите .txt файл выше..."
+        placeholder="Загрузите фото выше → текст появится здесь автоматически..."
     )
     
-    # Синхронизация: если пользователь редактирует текст вручную
+    # Синхронизация состояния
     if contract_text != st.session_state.contract_txt:
         st.session_state.contract_txt = contract_text
 
     # Кнопки управления
-    c1, c2 = st.columns([3, 1])
+    c1, c2, c3 = st.columns([3, 1, 1])
     with c1:
-        analyze_btn = st.button("🚀 Проверить договор", use_container_width=True, type="primary", disabled=st.session_state.is_analyzing or len(contract_text.strip()) < 10)
+        analyze_btn = st.button("🚀 Анализировать договор", use_container_width=True, type="primary", disabled=st.session_state.is_analyzing or len(contract_text.strip()) < 10)
     with c2:
         if st.button("🗑️ Очистить", use_container_width=True):
             st.session_state.contract_txt = ""
-            st.session_state.file_uploaded = False
             st.session_state.result = ""
             st.rerun()
+    with c3:
+        if st.button("📷 Новое фото", use_container_width=True):
+            st.session_state.contract_txt = ""
+            st.session_state.result = ""
+            st.rerun()
+
+    # Инструкция по съёмке
+    with st.expander("📸 Как сделать хорошее фото документа?"):
+        st.markdown("""
+        **✅ Правильно:**
+        • Хорошее освещение (дневной свет или лампа)
+        • Фото сверху, без бликов
+        • Весь текст в кадре, чётко
+        • Документ на ровной поверхности
+        
+        **❌ Избегайте:**
+        • Тени на документе
+        • Размытое фото
+        • Документ под углом
+        • Блики от вспышки
+        """)
 
     # ЛОГИКА АНАЛИЗА
     if analyze_btn:
@@ -339,7 +415,7 @@ with tab_doc:
                 st.error(error)
             else:
                 st.session_state.result = result
-                st.session_state.history.insert(0, {"type": "Договор", "preview": contract_text[:50]+"...", "res": result})
+                st.session_state.history.insert(0, {"type": "Договор (OCR)", "preview": contract_text[:50]+"...", "res": result})
                 st.rerun()
 
     # ВЫВОД РЕЗУЛЬТАТА
@@ -406,7 +482,7 @@ if st.session_state.history:
 
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.8rem; margin-top: 20px;">
-    <p>⚖️ Context.Pro Legal AI | Версия 2.1 (Auto-Fill Fix)</p>
+    <p>⚖️ Context.Pro Legal AI | Версия 3.0 (OCR Enabled)</p>
     <p>Не является публичной офертой. Не заменяет живого юриста.</p>
 </div>
 """, unsafe_allow_html=True)
