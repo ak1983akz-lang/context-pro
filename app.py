@@ -43,7 +43,8 @@ defaults = {
     'last_mode': None,
     'jurisdiction': "🇷🇺 РФ",
     'history': [],
-    'show_rules': False
+    'show_rules': False,
+    'file_uploaded': False  # Флаг загрузки файла
 }
 
 for key, val in defaults.items():
@@ -249,16 +250,20 @@ with tab_doc:
         key="file_uploader_contract"
     )
     
-    # Логика обработки файла
-    file_text = ""
-    if uploaded_file is not None:
+    # 🔧 ИСПРАВЛЕНИЕ: Логика обработки файла с автозаполнением
+    if uploaded_file is not None and not st.session_state.file_uploaded:
         try:
             file_text = uploaded_file.read().decode("utf-8")
+            st.session_state.contract_txt = file_text  # Записываем в сессию
+            st.session_state.file_uploaded = True  # Ставим флаг
             st.success(f"✅ Загружено: {len(file_text)} символов")
-            if file_text and not st.session_state.contract_txt:
-                st.session_state.contract_txt = file_text
+            st.rerun()  # Принудительно обновляем страницу для отображения текста
         except Exception as e:
             st.error(f"⚠️ Ошибка чтения файла: {str(e)}")
+    
+    # Сброс флага если файл убрали
+    if uploaded_file is None and st.session_state.file_uploaded:
+        st.session_state.file_uploaded = False
     
     # Подсказка для PDF и фото
     with st.expander("📄 Как работать с PDF и фото документов?"):
@@ -276,16 +281,16 @@ with tab_doc:
         **🔄 Или сохраните PDF как .txt** и загрузите через кнопку выше
         """)
     
-    # Поле ввода текста
+    # Поле ввода текста — ТЕПЕРЬ БЕРЕТ ЗНАЧЕНИЕ ИЗ SESSION_STATE
     contract_text = st.text_area(
         "Текст договора:", 
-        value=st.session_state.contract_txt, 
+        value=st.session_state.contract_txt,  # ← Ключевой момент
         height=300, 
         key="area_contract",
         placeholder="Вставьте текст сюда или загрузите .txt файл выше..."
     )
     
-    # Синхронизация состояния
+    # Синхронизация: если пользователь редактирует текст вручную
     if contract_text != st.session_state.contract_txt:
         st.session_state.contract_txt = contract_text
 
@@ -296,6 +301,7 @@ with tab_doc:
     with c2:
         if st.button("🗑️ Очистить", use_container_width=True):
             st.session_state.contract_txt = ""
+            st.session_state.file_uploaded = False
             st.session_state.result = ""
             st.rerun()
 
@@ -400,7 +406,7 @@ if st.session_state.history:
 
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.8rem; margin-top: 20px;">
-    <p>⚖️ Context.Pro Legal AI | Версия 2.0 (Mobile Optimized)</p>
+    <p>⚖️ Context.Pro Legal AI | Версия 2.1 (Auto-Fill Fix)</p>
     <p>Не является публичной офертой. Не заменяет живого юриста.</p>
 </div>
 """, unsafe_allow_html=True)
