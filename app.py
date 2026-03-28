@@ -60,19 +60,21 @@ for key, val in defaults.items():
 def extract_text_from_image(uploaded_file):
     """Извлекает текст из изображения через OCR.space API"""
     try:
-        # Конвертируем изображение в base64
-        image_bytes = uploaded_file.read()
+        # Сбрасываем позицию файла на начало (важно для повторных чтений)
+        uploaded_file.seek(0)
         
         # Отправляем на OCR.space
         response = requests.post(
             'https://api.ocr.space/parse/image',
-            files={'file': uploaded_file},
+            files={'file': (uploaded_file.name, uploaded_file.read(), uploaded_file.type)},
             data={
                 'apikey': 'helloworld',  # Бесплатный API ключ (до 25000 запросов/мес)
-                'language': 'russian',
+                'language': 'rus',       # ✅ ИСПРАВЛЕНО: 'rus' вместо 'russian'
                 'isOverlayRequired': 'false',
                 'detectOrientation': 'true',
-                'isTable': 'true'
+                'isTable': 'true',
+                'scale': 'true',         # ✅ Улучшает качество распознавания
+                'OCREngine': '2'         # ✅ Новый движок — лучше для кириллицы
             },
             timeout=60
         )
@@ -83,10 +85,17 @@ def extract_text_from_image(uploaded_file):
         data = response.json()
         
         if data.get('IsErroredOnProcessing'):
-            return f"⚠️ Ошибка OCR: {data.get('ErrorMessage', ['Неизвестная ошибка'])[0]}"
+            error_msg = data.get('ErrorMessage', ['Неизвестная ошибка'])
+            if isinstance(error_msg, list):
+                error_msg = error_msg[0]
+            return f"⚠️ Ошибка OCR: {error_msg}"
         
         # Извлекаем текст из результата
-        text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
+        parsed_results = data.get('ParsedResults', [])
+        if not parsed_results:
+            return "⚠️ Текст не распознан. Попробуйте сделать фото чётче."
+        
+        text = parsed_results[0].get('ParsedText', '')
         
         return text.strip() if text.strip() else "⚠️ Текст не распознан. Попробуйте сделать фото чётче."
         
@@ -481,7 +490,7 @@ if st.session_state.history:
 
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.8rem; margin-top: 20px;">
-    <p>⚖️ Context.Pro Legal AI | Версия 3.1 (OCR.space API)</p>
+    <p>⚖️ Context.Pro Legal AI | Версия 3.2 (OCR Fixed)</p>
     <p>Не является публичной офертой. Не заменяет живого юриста.</p>
 </div>
 """, unsafe_allow_html=True)
