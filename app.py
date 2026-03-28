@@ -29,15 +29,17 @@ if 'contract_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 if 'jurisdiction' not in st.session_state:
-    st.session_state.jurisdiction = "🇷🇺 РФ"
+    st.session_state.jurisdiction = "🇷 РФ"
 if 'is_analyzing' not in st.session_state:
     st.session_state.is_analyzing = False
 if 'last_mode' not in st.session_state:
     st.session_state.last_mode = None
 if 'ocr_counter' not in st.session_state:
-    st.session_state.ocr_counter = 0  # Счётчик для принудительного обновления виджета
+    st.session_state.ocr_counter = 0
 if 'ocr_complete' not in st.session_state:
     st.session_state.ocr_complete = False
+if 'show_rules' not in st.session_state:
+    st.session_state.show_rules = False  # ← Для кнопки правил
 
 # =============================================================================
 # 📸 OCR ЧЕРЕЗ OCR.SPACE
@@ -155,6 +157,23 @@ h1 { font-size: 1.6rem !important; }
     border-radius: 0 8px 8px 0;
     color: #000;
 }
+.rules-box {
+    background: #161b22; 
+    border-left: 4px solid #1f77b4; 
+    padding: 15px; 
+    border-radius: 0 8px 8px 0; 
+    margin-bottom: 20px;
+}
+.rule-item { 
+    display: flex; 
+    align-items: start; 
+    margin-bottom: 10px; 
+    font-size: 0.95rem; 
+}
+.rule-icon { 
+    margin-right: 10px; 
+    min-width: 24px; 
+}
 @media (max-width: 768px) {
     .block-container { padding-top: 1rem !important; }
     h1 { font-size: 1.3rem !important; }
@@ -167,10 +186,33 @@ h1 { font-size: 1.6rem !important; }
 # 🏗 ИНТЕРФЕЙС
 # =============================================================================
 
-st.title("⚖️ Context.Pro Legal")
-st.caption("📸 Сфотографируй документ → Получи анализ")
+# 1. ШАПКА С КНОПКОЙ ПРАВИЛ
+col_h1, col_h2 = st.columns([4, 1])
+with col_h1:
+    st.title("⚖️ Context.Pro Legal")
+    st.caption("📸 Сфотографируй документ → Получи анализ")
+with col_h2:
+    # ✅ КНОПКА ПРАВИЛ ВОССТАНОВЛЕНА
+    if st.button("❓ Правила", use_container_width=True, key="btn_rules_toggle"):
+        st.session_state.show_rules = not st.session_state.show_rules
 
-# Выбор юрисдикции
+# 2. БЛОК ПРАВИЛ (показывается если нажали кнопку)
+if st.session_state.show_rules:
+    st.markdown("""
+    <div class="rules-box">
+        <h3 style="margin-top:0; color: #fff;">📜 Правила сервиса</h3>
+        <div class="rule-item"><span class="rule-icon">1️⃣</span><span>Выберите юрисдикцию (РФ или РБ) — это важно для ссылок на законы</span></div>
+        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Сфотографируйте документ камерой телефона</span></div>
+        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>Загрузите фото во вкладку «📸 Загрузить фото»</span></div>
+        <div class="rule-item"><span class="rule-icon">4️⃣</span><span>Нажмите «🔍 Распознать текст» и подождите 10-30 секунд</span></div>
+        <div class="rule-item"><span class="rule-icon">5️⃣</span><span>Проверьте текст и нажмите «🚀 Анализировать договор»</span></div>
+        <div class="rule-item"><span class="rule-icon">🔒</span><span>Ваши данные не сохраняются после завершения сессии</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
+
+# 3. ВЫБОР ЮРИСДИКЦИИ
 st.markdown("### ⚖️ Юрисдикция")
 jur = st.radio(
     "Выберите:",
@@ -181,7 +223,7 @@ jur = st.radio(
 st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
 st.divider()
 
-# ВКЛАДКИ
+# 4. ВКЛАДКИ
 tab_photo, tab_manual, tab_question = st.tabs(["📸 Загрузить фото", "✍️ Вставить текст", "💬 Вопрос"])
 
 # === ВКЛАДКА 1: ФОТО ===
@@ -199,7 +241,7 @@ with tab_photo:
     uploaded_file = st.file_uploader(
         "Нажмите чтобы выбрать фото",
         type=["jpg", "jpeg", "png"],
-        key=f"photo_upload_{st.session_state.ocr_counter}"  # ← Ключ меняется после OCR
+        key=f"photo_upload_{st.session_state.ocr_counter}"
     )
     
     if uploaded_file:
@@ -229,7 +271,7 @@ with tab_photo:
             if text:
                 st.session_state.contract_txt = text
                 st.session_state.ocr_complete = True
-                st.session_state.ocr_counter += 1  # ← Увеличиваем счётчик для обновления виджета
+                st.session_state.ocr_counter += 1
                 st.success(f"✅ Текст распознан! ({len(text)} символов)")
                 st.rerun()
             else:
@@ -245,24 +287,20 @@ with tab_photo:
     
     st.divider()
     
-    # Показываем текст если OCR завершён
     if st.session_state.ocr_complete and st.session_state.contract_txt:
         st.markdown("### 📝 Распознанный текст")
         st.caption(f"✅ Загружено {len(st.session_state.contract_txt)} символов")
         
-        # 🔧 Ключ виджета зависит от ocr_counter — это заставляет Streamlit пересоздать виджет
         contract_text = st.text_area(
             "Текст договора:",
             value=st.session_state.contract_txt,
             height=300,
-            key=f"contract_area_{st.session_state.ocr_counter}"  # ← Меняем ключ!
+            key=f"contract_area_{st.session_state.ocr_counter}"
         )
         
-        # Сохраняем изменения если пользователь редактирует
         if contract_text != st.session_state.contract_txt:
             st.session_state.contract_txt = contract_text
         
-        # Кнопка анализа
         if st.button("🚀 Анализировать договор", type="primary", use_container_width=True, 
                      disabled=len(contract_text.strip()) < 50, key="btn_analyze"):
             st.session_state.is_analyzing = True
@@ -273,7 +311,7 @@ with tab_photo:
             jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in st.session_state.jurisdiction else "РБ (ГК РБ)"
             system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}.
 Проанализируй договор и укажи:
-1. 🔍 Ключевые риски (🔴//🟢)
+1. 🔍 Ключевые риски (🔴/🟡/🟢)
 2. ✅ Что хорошо
 3. 📝 Рекомендации
 4. ⚖️ Итог: Безопасно/Требует правок/Опасно"""
@@ -289,7 +327,6 @@ with tab_photo:
                 st.success("✅ Готово!")
                 st.rerun()
         
-        # Результат анализа
         if st.session_state.last_mode == "contract" and st.session_state.result:
             st.divider()
             st.markdown("### 📊 Результаты анализа")
@@ -303,7 +340,6 @@ with tab_photo:
                 key="btn_download"
             )
     else:
-        # Если OCR ещё не был — показываем пустое поле
         st.markdown("### 📝 Текстовое поле")
         st.caption("Текст появится здесь после распознавания фото")
         
