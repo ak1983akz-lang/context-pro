@@ -34,8 +34,10 @@ if 'is_analyzing' not in st.session_state:
     st.session_state.is_analyzing = False
 if 'last_mode' not in st.session_state:
     st.session_state.last_mode = None
-if 'ocr_done' not in st.session_state:
-    st.session_state.ocr_done = False
+if 'ocr_counter' not in st.session_state:
+    st.session_state.ocr_counter = 0  # Счётчик для принудительного обновления виджета
+if 'ocr_complete' not in st.session_state:
+    st.session_state.ocr_complete = False
 
 # =============================================================================
 # 📸 OCR ЧЕРЕЗ OCR.SPACE
@@ -153,14 +155,6 @@ h1 { font-size: 1.6rem !important; }
     border-radius: 0 8px 8px 0;
     color: #000;
 }
-.text-filled {
-    border: 2px solid #22c55e !important;
-    animation: pulse-green 1s ease-in-out;
-}
-@keyframes pulse-green {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-    50% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-}
 @media (max-width: 768px) {
     .block-container { padding-top: 1rem !important; }
     h1 { font-size: 1.3rem !important; }
@@ -180,7 +174,7 @@ st.caption("📸 Сфотографируй документ → Получи а
 st.markdown("### ⚖️ Юрисдикция")
 jur = st.radio(
     "Выберите:",
-    ["🇷🇺 РФ — Россия", "🇧🇾 РБ — Беларусь"],
+    ["🇷🇺 РФ — Россия", "🇧 РБ — Беларусь"],
     horizontal=True,
     label_visibility="collapsed"
 )
@@ -195,7 +189,6 @@ with tab_photo:
     st.markdown("#### 📷 Загрузите фото договора")
     st.info("💡 Сделайте фото документа камерой телефона, затем загрузите сюда")
     
-    # Предупреждение о времени
     st.markdown("""
     <div class="ocr-warning">
     ⏱️ <strong>Важно:</strong> Распознавание текста занимает 10-30 секунд. 
@@ -206,13 +199,13 @@ with tab_photo:
     uploaded_file = st.file_uploader(
         "Нажмите чтобы выбрать фото",
         type=["jpg", "jpeg", "png"],
-        key="photo_upload"
+        key=f"photo_upload_{st.session_state.ocr_counter}"  # ← Ключ меняется после OCR
     )
     
     if uploaded_file:
         st.image(uploaded_file, caption="📷 Ваше фото", use_container_width=True)
         
-        if st.button("🔍 Распознать текст", type="primary", use_container_width=True):
+        if st.button("🔍 Распознать текст", type="primary", use_container_width=True, key="btn_ocr"):
             progress_bar = st.progress(0)
             status_text = st.empty()
             
@@ -234,49 +227,44 @@ with tab_photo:
             status_text.empty()
             
             if text:
-                # 🔧 ИСПРАВЛЕНИЕ: записываем текст и делаем rerun
                 st.session_state.contract_txt = text
-                st.session_state.ocr_done = True
-                st.success("✅ Текст распознан! Поле ниже заполнено автоматически.")
-                st.rerun()  # ← КЛЮЧЕВОЙ МОМЕНТ: обновляем страницу чтобы текст появился в поле
+                st.session_state.ocr_complete = True
+                st.session_state.ocr_counter += 1  # ← Увеличиваем счётчик для обновления виджета
+                st.success(f"✅ Текст распознан! ({len(text)} символов)")
+                st.rerun()
             else:
-                st.error("⚠️ Не удалось автоматически распознать текст")
+                st.error("⚠️ Не удалось распознать текст")
                 st.markdown("""
                 <div class="manual-hint">
                 <strong>📱 Быстрое решение:</strong><br>
-                • <strong>iPhone:</strong> Откройте это фото → зажмите текст → «Копировать»<br>
+                • <strong>iPhone:</strong> Откройте фото → зажмите текст → «Копировать»<br>
                 • <strong>Android:</strong> Google Lens → «Текст» → «Копировать»<br>
-                • Затем перейдите во вкладку «✍️ Вставить текст»
+                • Перейдите во вкладку «✍️ Вставить текст»
                 </div>
                 """, unsafe_allow_html=True)
     
     st.divider()
-    st.markdown("### 📝 Распознанный текст")
-    st.caption("Проверьте и отредактируйте если нужно")
     
-    # 🔧 Поле ввода с правильным value из session_state
-    contract_text = st.text_area(
-        "Текст договора:",
-        value=st.session_state.contract_txt,  # ← Берём значение из сессии
-        height=300,
-        key="contract_area",
-        placeholder="Здесь появится текст после распознавания..."
-    )
-    
-    # Синхронизация: если пользователь редактирует текст вручную
-    if contract_text != st.session_state.contract_txt:
-        st.session_state.contract_txt = contract_text
-    
-    # Подсказка если текст есть
-    if st.session_state.contract_txt and len(st.session_state.contract_txt) > 0:
-        st.success(f"📄 Загружено {len(st.session_state.contract_txt)} символов")
-    
-    # Кнопка анализа
-    if st.button("🚀 Анализировать договор", type="primary", use_container_width=True, 
-                 disabled=len(contract_text.strip()) < 50):
-        if len(contract_text.strip()) < 50:
-            st.error("📋 Слишком короткий текст (минимум 50 символов)")
-        else:
+    # Показываем текст если OCR завершён
+    if st.session_state.ocr_complete and st.session_state.contract_txt:
+        st.markdown("### 📝 Распознанный текст")
+        st.caption(f"✅ Загружено {len(st.session_state.contract_txt)} символов")
+        
+        # 🔧 Ключ виджета зависит от ocr_counter — это заставляет Streamlit пересоздать виджет
+        contract_text = st.text_area(
+            "Текст договора:",
+            value=st.session_state.contract_txt,
+            height=300,
+            key=f"contract_area_{st.session_state.ocr_counter}"  # ← Меняем ключ!
+        )
+        
+        # Сохраняем изменения если пользователь редактирует
+        if contract_text != st.session_state.contract_txt:
+            st.session_state.contract_txt = contract_text
+        
+        # Кнопка анализа
+        if st.button("🚀 Анализировать договор", type="primary", use_container_width=True, 
+                     disabled=len(contract_text.strip()) < 50, key="btn_analyze"):
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "contract"
             
@@ -285,7 +273,7 @@ with tab_photo:
             jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in st.session_state.jurisdiction else "РБ (ГК РБ)"
             system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}.
 Проанализируй договор и укажи:
-1. 🔍 Ключевые риски (🔴/🟡/🟢)
+1. 🔍 Ключевые риски (🔴//🟢)
 2. ✅ Что хорошо
 3. 📝 Рекомендации
 4. ⚖️ Итог: Безопасно/Требует правок/Опасно"""
@@ -300,24 +288,36 @@ with tab_photo:
                 st.session_state.result = result
                 st.success("✅ Готово!")
                 st.rerun()
-    
-    # Показ результата
-    if st.session_state.last_mode == "contract" and st.session_state.result:
-        st.divider()
-        st.markdown("### 📊 Результаты анализа")
-        st.markdown(st.session_state.result)
         
-        st.download_button(
-            "📥 Скачать отчёт",
-            st.session_state.result,
-            "analysis.txt",
-            use_container_width=True
+        # Результат анализа
+        if st.session_state.last_mode == "contract" and st.session_state.result:
+            st.divider()
+            st.markdown("### 📊 Результаты анализа")
+            st.markdown(st.session_state.result)
+            
+            st.download_button(
+                "📥 Скачать отчёт",
+                st.session_state.result,
+                "analysis.txt",
+                use_container_width=True,
+                key="btn_download"
+            )
+    else:
+        # Если OCR ещё не был — показываем пустое поле
+        st.markdown("### 📝 Текстовое поле")
+        st.caption("Текст появится здесь после распознавания фото")
+        
+        contract_text = st.text_area(
+            "Текст договора:",
+            value="",
+            height=300,
+            key=f"contract_area_empty_{st.session_state.ocr_counter}"
         )
 
 # === ВКЛАДКА 2: РУЧНОЙ ВВОД ===
 with tab_manual:
     st.markdown("#### ✍️ Вставьте текст договора")
-    st.info("💡 Если фото не распозналось: откройте фото на телефоне → выделите текст → Копировать → Вставить сюда")
+    st.info("💡 Откройте фото на телефоне → выделите текст → Копировать → Вставить сюда")
     
     manual_text = st.text_area(
         "Текст:",
