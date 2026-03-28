@@ -42,6 +42,10 @@ if 'show_rules' not in st.session_state:
     st.session_state.show_rules = False
 if 'question_txt' not in st.session_state:
     st.session_state.question_txt = ""
+if 'uploaded_files' not in st.session_state:
+    st.session_state.uploaded_files = []
+if 'page_texts' not in st.session_state:
+    st.session_state.page_texts = {}
 
 # =============================================================================
 # 🔄 ФУНКЦИЯ СБРОСА СЕССИИ
@@ -56,6 +60,8 @@ def reset_session():
     st.session_state.ocr_counter = 0
     st.session_state.ocr_complete = False
     st.session_state.show_rules = False
+    st.session_state.uploaded_files = []
+    st.session_state.page_texts = {}
 
 # =============================================================================
 # 📸 OCR ЧЕРЕЗ OCR.SPACE
@@ -196,6 +202,19 @@ h1 { font-size: 1.6rem !important; }
     margin-right: 10px; 
     min-width: 24px; 
 }
+.page-card {
+    background: #1e2329;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+}
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
 @media (max-width: 768px) {
     .block-container { padding-top: 1rem !important; }
     h1 { font-size: 1.3rem !important; }
@@ -213,13 +232,11 @@ h1 { font-size: 1.6rem !important; }
 col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro Legal")
-    st.caption("📸 Сфотографируй документ → Получи анализ")
+    st.caption("📸 Фото → Текст → Анализ")
 with col_h2:
-    # Кнопка правил
     if st.button("❓ Правила", use_container_width=True, key="btn_rules_toggle"):
         st.session_state.show_rules = not st.session_state.show_rules
 with col_h3:
-    # ✅ КНОПКА НОВАЯ СЕССИЯ
     if st.button("🔄 Сброс", use_container_width=True, key="btn_new_session", help="Начать новую сессию"):
         reset_session()
         st.success("✅ Сессия очищена!")
@@ -230,12 +247,12 @@ if st.session_state.show_rules:
     st.markdown("""
     <div class="rules-box">
         <h3 style="margin-top:0; color: #fff;">📜 Правила сервиса</h3>
-        <div class="rule-item"><span class="rule-icon">1️⃣</span><span>Выберите юрисдикцию (РФ или РБ) — это важно для ссылок на законы</span></div>
-        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Сфотографируйте документ камерой телефона</span></div>
-        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>Загрузите фото во вкладку «📸 Загрузить фото»</span></div>
-        <div class="rule-item"><span class="rule-icon">4️⃣</span><span>Нажмите «🔍 Распознать текст» и подождите 10-30 секунд</span></div>
-        <div class="rule-item"><span class="rule-icon">5️⃣</span><span>Проверьте текст и нажмите «🚀 Анализировать договор»</span></div>
-        <div class="rule-item"><span class="rule-icon">🔒</span><span>Ваши данные не сохраняются после завершения сессии</span></div>
+        <div class="rule-item"><span class="rule-icon">1️⃣</span><span>Выберите юрисдикцию (РФ или РБ)</span></div>
+        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Сфотографируйте все страницы документа</span></div>
+        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>Загрузите фото (можно несколько сразу)</span></div>
+        <div class="rule-item"><span class="rule-icon">4️⃣</span><span>Нажмите «🔍 Распознать все страницы»</span></div>
+        <div class="rule-item"><span class="rule-icon">5️⃣</span><span>Проверьте текст и нажмите «🚀 Анализировать»</span></div>
+        <div class="rule-item"><span class="rule-icon">🔒</span><span>Данные не сохраняются после сессии</span></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -245,7 +262,7 @@ st.divider()
 st.markdown("### ⚖️ Юрисдикция")
 jur = st.radio(
     "Выберите:",
-    ["🇷🇺 РФ — Россия", "🇧 РБ — Беларусь"],
+    ["🇷🇺 РФ — Россия", "🇧🇾 РБ — Беларусь"],
     horizontal=True,
     label_visibility="collapsed"
 )
@@ -255,81 +272,109 @@ st.divider()
 # 4. ВКЛАДКИ
 tab_photo, tab_manual, tab_question = st.tabs(["📸 Загрузить фото", "✍️ Вставить текст", "💬 Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО ===
+# === ВКЛАДКА 1: ФОТО (МНОГОСТРАНИЧНЫЙ РЕЖИМ) ===
 with tab_photo:
-    st.markdown("#### 📷 Загрузите фото договора")
-    st.info("💡 Сделайте фото документа камерой телефона, затем загрузите сюда")
+    st.markdown("#### 📷 Загрузите фото документа")
+    st.info("💡 Можно загрузить несколько фото сразу — для многостраничных документов")
     
     st.markdown("""
     <div class="ocr-warning">
-    ⏱️ <strong>Важно:</strong> Распознавание текста занимает 10-30 секунд. 
-    Пожалуйста, подождите — индикатор загрузки покажет процесс.
+    ⏱️ <strong>Важно:</strong> Распознавание занимает ~15-30 сек на страницу. 
+    Для 3 страниц подождите около 1 минуты.
     </div>
     """, unsafe_allow_html=True)
     
-    uploaded_file = st.file_uploader(
-        "Нажмите чтобы выбрать фото",
+    # 🔧 Загрузка нескольких файлов
+    uploaded_files = st.file_uploader(
+        "Выберите одно или несколько фото",
         type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,  # ← Можно выбрать несколько!
         key=f"photo_upload_{st.session_state.ocr_counter}"
     )
     
-    if uploaded_file:
-        st.image(uploaded_file, caption="📷 Ваше фото", use_container_width=True)
+    if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files
+        st.success(f"📁 Загружено файлов: {len(uploaded_files)}")
         
-        if st.button("🔍 Распознать текст", type="primary", use_container_width=True, key="btn_ocr"):
+        # Показываем превью всех фото
+        st.markdown("##### 📋 Предпросмотр страниц:")
+        cols = st.columns(min(len(uploaded_files), 3))
+        for idx, file in enumerate(uploaded_files):
+            with cols[idx % 3]:
+                st.image(file, caption=f"📄 Страница {idx+1}", use_container_width=True)
+        
+        # Кнопка распознавания всех страниц
+        if st.button("🔍 Распознать все страницы", type="primary", use_container_width=True, key="btn_ocr_multi"):
             progress_bar = st.progress(0)
             status_text = st.empty()
+            all_text = ""
+            success_count = 0
             
-            st.markdown('<div class="loading-box">🔄 Распознаю текст с фото...<br><small>Это займёт 10-30 секунд</small></div>', unsafe_allow_html=True)
+            st.markdown('<div class="loading-box">🔄 Распознаю страницы...<br><small>Не закрывайте вкладку</small></div>', unsafe_allow_html=True)
             
-            for i in range(10):
-                time.sleep(0.3)
-                progress_bar.progress((i + 1) * 10)
-                if i < 3:
-                    status_text.text("📡 Отправка фото на сервер...")
-                elif i < 6:
-                    status_text.text("🔍 Анализ изображения...")
+            total = len(uploaded_files)
+            for idx, file in enumerate(uploaded_files):
+                # Обновляем прогресс
+                progress = int((idx / total) * 100)
+                progress_bar.progress(progress)
+                status_text.text(f"📄 Страница {idx+1} из {total}: распознаю...")
+                
+                # Распознаём текст
+                text, error = extract_text_from_image(file)
+                
+                if text:
+                    # Добавляем номер страницы для структуры
+                    page_header = f"\n\n--- СТРАНИЦА {idx+1} ---\n\n" if idx > 0 else ""
+                    all_text += page_header + text
+                    success_count += 1
+                    st.session_state.page_texts[idx] = text
                 else:
-                    status_text.text("✍️ Извлечение текста...")
+                    st.warning(f"⚠️ Страница {idx+1}: не распознана")
             
-            text, error = extract_text_from_image(uploaded_file)
-            
+            # Завершаем прогресс
             progress_bar.progress(100)
             status_text.empty()
             
-            if text:
-                st.session_state.contract_txt = text
+            if all_text.strip():
+                st.session_state.contract_txt = all_text.strip()
                 st.session_state.ocr_complete = True
                 st.session_state.ocr_counter += 1
-                st.success(f"✅ Текст распознан! ({len(text)} символов)")
+                st.success(f"✅ Распознано: {success_count}/{total} страниц ({len(all_text)} символов)")
                 st.rerun()
             else:
-                st.error("⚠️ Не удалось распознать текст")
+                st.error("❌ Не удалось распознать ни одну страницу")
                 st.markdown("""
                 <div class="manual-hint">
-                <strong>📱 Быстрое решение:</strong><br>
-                • <strong>iPhone:</strong> Откройте фото → зажмите текст → «Копировать»<br>
-                • <strong>Android:</strong> Google Lens → «Текст» → «Копировать»<br>
-                • Перейдите во вкладку «✍️ Вставить текст»
+                <strong>📱 Альтернатива:</strong><br>
+                • Откройте каждое фото на телефоне → выделите текст → Копировать<br>
+                • Перейдите во вкладку «✍️ Вставить текст» и вставьте всё вместе
                 </div>
                 """, unsafe_allow_html=True)
     
     st.divider()
     
+    # Поле с распознанным текстом (если есть)
     if st.session_state.ocr_complete and st.session_state.contract_txt:
         st.markdown("### 📝 Распознанный текст")
         st.caption(f"✅ Загружено {len(st.session_state.contract_txt)} символов")
         
+        # Показываем статистику по страницам
+        if st.session_state.page_texts:
+            with st.expander(f"📊 Статистика по страницам ({len(st.session_state.page_texts)} стр.)", expanded=False):
+                for page_idx, text in st.session_state.page_texts.items():
+                    st.markdown(f"**Страница {page_idx+1}**: {len(text)} символов")
+        
         contract_text = st.text_area(
-            "Текст договора:",
+            "Текст договора (можно редактировать):",
             value=st.session_state.contract_txt,
-            height=300,
+            height=400,  # ↑ Выше для многостраничных
             key=f"contract_area_{st.session_state.ocr_counter}"
         )
         
         if contract_text != st.session_state.contract_txt:
             st.session_state.contract_txt = contract_text
         
+        # Кнопка анализа
         if st.button("🚀 Анализировать договор", type="primary", use_container_width=True, 
                      disabled=len(contract_text.strip()) < 50, key="btn_analyze"):
             st.session_state.is_analyzing = True
@@ -339,11 +384,11 @@ with tab_photo:
             
             jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in st.session_state.jurisdiction else "РБ (ГК РБ)"
             system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}.
-Проанализируй договор и укажи:
-1. 🔍 Ключевые риски (🔴//🟢)
-2. ✅ Что хорошо
-3. 📝 Рекомендации
-4. ⚖️ Итог: Безопасно/Требует правок/Опасно"""
+Проанализируй МНОГОСТРАНИЧНЫЙ договор и укажи:
+1. 🔍 Ключевые риски (🔴/🟡/🟢) с указанием страниц если возможно
+2. ✅ Что составлено грамотно
+3. 📝 Рекомендации по изменению пунктов
+4. ⚖️ Итоговый вердикт"""
             
             result, error = query_ai(system_prompt, contract_text)
             
@@ -356,6 +401,7 @@ with tab_photo:
                 st.success("✅ Готово!")
                 st.rerun()
         
+        # Результат анализа
         if st.session_state.last_mode == "contract" and st.session_state.result:
             st.divider()
             st.markdown("### 📊 Результаты анализа")
@@ -364,30 +410,24 @@ with tab_photo:
             st.download_button(
                 "📥 Скачать отчёт",
                 st.session_state.result,
-                "analysis.txt",
+                "legal_analysis.txt",
                 use_container_width=True,
                 key="btn_download"
             )
     else:
         st.markdown("### 📝 Текстовое поле")
-        st.caption("Текст появится здесь после распознавания фото")
-        
-        contract_text = st.text_area(
-            "Текст договора:",
-            value="",
-            height=300,
-            key=f"contract_area_empty_{st.session_state.ocr_counter}"
-        )
+        st.caption("Текст появится здесь после распознавания")
+        st.text_area("Текст договора:", value="", height=300, disabled=True, key="dummy_area")
 
 # === ВКЛАДКА 2: РУЧНОЙ ВВОД ===
 with tab_manual:
     st.markdown("#### ✍️ Вставьте текст договора")
-    st.info("💡 Откройте фото на телефоне → выделите текст → Копировать → Вставить сюда")
+    st.info("💡 Для многостраничных: скопируйте текст со всех страниц и вставьте сюда")
     
     manual_text = st.text_area(
         "Текст:",
         value=st.session_state.contract_txt,
-        height=300,
+        height=400,
         key="manual_area"
     )
     st.session_state.contract_txt = manual_text
