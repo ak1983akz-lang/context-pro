@@ -34,6 +34,8 @@ if 'is_analyzing' not in st.session_state:
     st.session_state.is_analyzing = False
 if 'last_mode' not in st.session_state:
     st.session_state.last_mode = None
+if 'ocr_done' not in st.session_state:
+    st.session_state.ocr_done = False
 
 # =============================================================================
 # 📸 OCR ЧЕРЕЗ OCR.SPACE
@@ -42,7 +44,6 @@ def extract_text_from_image(uploaded_file):
     """Распознавание текста через OCR.space API"""
     try:
         uploaded_file.seek(0)
-        
         api_key = 'helloworld'
         
         response = requests.post(
@@ -64,9 +65,7 @@ def extract_text_from_image(uploaded_file):
                 text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
                 if text.strip():
                     return text.strip(), None
-        
         return None, "API_LIMIT"
-        
     except Exception as e:
         return None, str(e)
 
@@ -110,7 +109,6 @@ def query_ai(system_prompt: str, user_text: str):
             data = response.json()
             return data["choices"][0]["message"]["content"], None
         return None, f"Ошибка {response.status_code}"
-        
     except Exception as e:
         return None, str(e)
 
@@ -155,6 +153,14 @@ h1 { font-size: 1.6rem !important; }
     border-radius: 0 8px 8px 0;
     color: #000;
 }
+.text-filled {
+    border: 2px solid #22c55e !important;
+    animation: pulse-green 1s ease-in-out;
+}
+@keyframes pulse-green {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+    50% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+}
 @media (max-width: 768px) {
     .block-container { padding-top: 1rem !important; }
     h1 { font-size: 1.3rem !important; }
@@ -178,7 +184,7 @@ jur = st.radio(
     horizontal=True,
     label_visibility="collapsed"
 )
-st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧 РБ"
+st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
 st.divider()
 
 # ВКЛАДКИ
@@ -204,18 +210,14 @@ with tab_photo:
     )
     
     if uploaded_file:
-        # Показываем фото
         st.image(uploaded_file, caption="📷 Ваше фото", use_container_width=True)
         
-        # Кнопка распознавания
         if st.button("🔍 Распознать текст", type="primary", use_container_width=True):
-            # Показываем индикатор загрузки
             progress_bar = st.progress(0)
             status_text = st.empty()
             
             st.markdown('<div class="loading-box">🔄 Распознаю текст с фото...<br><small>Это займёт 10-30 секунд</small></div>', unsafe_allow_html=True)
             
-            # Имитация прогресса
             for i in range(10):
                 time.sleep(0.3)
                 progress_bar.progress((i + 1) * 10)
@@ -226,15 +228,17 @@ with tab_photo:
                 else:
                     status_text.text("✍️ Извлечение текста...")
             
-            # Запускаем OCR
             text, error = extract_text_from_image(uploaded_file)
             
             progress_bar.progress(100)
             status_text.empty()
             
             if text:
+                # 🔧 ИСПРАВЛЕНИЕ: записываем текст и делаем rerun
                 st.session_state.contract_txt = text
-                st.success("✅ Текст распознан! Перейдите вниз для проверки и анализа.")
+                st.session_state.ocr_done = True
+                st.success("✅ Текст распознан! Поле ниже заполнено автоматически.")
+                st.rerun()  # ← КЛЮЧЕВОЙ МОМЕНТ: обновляем страницу чтобы текст появился в поле
             else:
                 st.error("⚠️ Не удалось автоматически распознать текст")
                 st.markdown("""
@@ -250,14 +254,22 @@ with tab_photo:
     st.markdown("### 📝 Распознанный текст")
     st.caption("Проверьте и отредактируйте если нужно")
     
+    # 🔧 Поле ввода с правильным value из session_state
     contract_text = st.text_area(
         "Текст договора:",
-        value=st.session_state.contract_txt,
+        value=st.session_state.contract_txt,  # ← Берём значение из сессии
         height=300,
         key="contract_area",
         placeholder="Здесь появится текст после распознавания..."
     )
-    st.session_state.contract_txt = contract_text
+    
+    # Синхронизация: если пользователь редактирует текст вручную
+    if contract_text != st.session_state.contract_txt:
+        st.session_state.contract_txt = contract_text
+    
+    # Подсказка если текст есть
+    if st.session_state.contract_txt and len(st.session_state.contract_txt) > 0:
+        st.success(f"📄 Загружено {len(st.session_state.contract_txt)} символов")
     
     # Кнопка анализа
     if st.button("🚀 Анализировать договор", type="primary", use_container_width=True, 
@@ -270,7 +282,6 @@ with tab_photo:
             
             st.markdown('<div class="loading-box">⚖️ Анализирую договор...</div>', unsafe_allow_html=True)
             
-            # Промпт для анализа
             jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in st.session_state.jurisdiction else "РБ (ГК РБ)"
             system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}.
 Проанализируй договор и укажи:
