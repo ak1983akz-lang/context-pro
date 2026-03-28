@@ -3,11 +3,10 @@ import requests
 import re
 import os
 import time
-import PyPDF2 # Библиотека для чтения PDF (нужно добавить в requirements.txt)
 import io
 
 # =============================================================================
-# 📱 PWA MANIFEST
+# 📱 PWA MANIFEST (для установки как приложения)
 # =============================================================================
 pwa_manifest = """
 <link rel="manifest" href="application/manifest+json,{
@@ -43,7 +42,7 @@ defaults = {
     'is_analyzing': False,
     'last_mode': None,
     'jurisdiction': "🇷🇺 РФ",
-    'history': [], # История сессии
+    'history': [],
     'show_rules': False
 }
 
@@ -52,38 +51,12 @@ for key, val in defaults.items():
         st.session_state[key] = val
 
 # =============================================================================
-# 🛠 ФУНКЦИИ (OCR пока эмулируем, но добавим загрузчик PDF)
-# =============================================================================
-
-def extract_text_from_pdf(uploaded_file):
-    """Извлекает текст из загруженного PDF"""
-    try:
-        pdf_reader = PyPDF2.PdfReader(uploaded_file)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() or ""
-        return text.strip()
-    except Exception as e:
-        return f"⚠️ Ошибка чтения PDF: {str(e)}"
-
-# def ocr_image(image_file):
-#     """
-#     ЗАГОТОВКА ДЛЯ OCR (Распознавание фото).
-#     Чтобы это работало, на сервере должны быть установлены:
-#     1. Tesseract OCR (системная утилита)
-#     2. Библиотека pytesseract и pillow
-#     Сейчас возвращает заглушку, так как на стандартном Streamlit Cloud это не работает без донастроек.
-#     """
-#     return "⚠️ Распознавание фото требует настройки сервера. Пожалуйста, скопируйте текст вручную или загрузите текстовый PDF."
-
-# =============================================================================
 # 🔒 ВАЛИДАЦИЯ
 # =============================================================================
 def validate_input(text: str, mode: str):
     text = text.strip()
     if not text:
         return False, "⚠️ Поле не может быть пустым"
-    # Упрощенная проверка на "осмысленность"
     if len(text) < 10:
         return False, "⚠️ Слишком короткий текст"
     
@@ -91,7 +64,6 @@ def validate_input(text: str, mode: str):
         if len(text) < 50:
             return False, "📋 Для анализа договора нужно минимум 50 символов"
         legal_markers = ["договор", "контракт", "сторона", "обязательство", "статья", "ГК", "ФЗ", "пункт", "соглашение", "аренда", "поставка", "услуга", "оплата"]
-        # Если нет явных маркеров, предупреждаем, но не блокируем (вдруг специфичный договор)
         if not any(marker in text.lower() for marker in legal_markers):
             return True, "⚠️ Внимание: Текст может не быть договором, но мы попробуем проанализировать." 
     return True, ""
@@ -151,7 +123,7 @@ def query_ai(system_prompt: str, user_text: str):
                 "X-Title": "Context.Pro Legal"
             },
             json={
-                "model": "deepseek/deepseek-chat", # Или другая модель, например 'meta-llama/llama-3-70b-instruct'
+                "model": "deepseek/deepseek-chat",
                 "messages": [
                     {"role": "system", "content": system_prompt}, 
                     {"role": "user", "content": user_text}
@@ -233,7 +205,6 @@ with col_h1:
     st.title("⚖️ Context.Pro Legal")
     st.caption("Анализ договоров • Консультации • РФ/РБ")
 with col_h2:
-    # Кнопка вызова правил
     if st.button("❓ Правила", use_container_width=True, key="btn_rules_toggle"):
         st.session_state.show_rules = not st.session_state.show_rules
 
@@ -243,8 +214,8 @@ if st.session_state.show_rules:
     <div class="rules-box">
         <h3 style="margin-top:0;">📜 Правила сервиса</h3>
         <div class="rule-item"><span class="rule-icon">1️⃣</span><span>Выберите юрисдикцию (РФ или РБ). Это критически важно для ссылок на законы.</span></div>
-        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Загрузите документ (PDF) или вставьте текст договора.</span></div>
-        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>Для фото-документов: используйте встроенное распознавание текста в телефоне (Live Text), затем вставляйте текст сюда.</span></div>
+        <div class="rule-item"><span class="rule-icon">2️⃣</span><span>Загрузите документ (TXT) или вставьте текст договора.</span></div>
+        <div class="rule-item"><span class="rule-icon">3️⃣</span><span>Для PDF/фото: используйте распознавание текста на телефоне (Live Text / Google Lens), затем вставьте текст.</span></div>
         <div class="rule-item"><span class="rule-icon">4️⃣</span><span>Нажмите «Анализировать». ИИ проверит риски за 15-30 секунд.</span></div>
         <div class="rule-item"><span class="rule-icon">🔒</span><span>Ваши данные не сохраняются на сервере после завершения сессии.</span></div>
     </div>
@@ -272,38 +243,46 @@ with tab_doc:
     
     # Загрузчик файлов
     uploaded_file = st.file_uploader(
-        "Загрузить договор (PDF, TXT)", 
-        type=["pdf", "txt"], 
-        help="Поддерживаются текстовые PDF. Фотографии пока нужно конвертировать в текст через телефон.",
+        "Загрузить документ (TXT)", 
+        type=["txt"], 
+        help="Поддерживаются текстовые файлы .txt. Для PDF используйте копирование текста через телефон.",
         key="file_uploader_contract"
     )
     
     # Логика обработки файла
     file_text = ""
     if uploaded_file is not None:
-        if uploaded_file.type == "application/pdf":
-            with st.spinner("📖 Читаю PDF..."):
-                file_text = extract_text_from_pdf(uploaded_file)
-                if file_text.startswith("⚠️"):
-                    st.error(file_text)
-                    file_text = ""
-                else:
-                    st.success(f"✅ Извлечено {len(file_text)} символов из PDF")
-        elif uploaded_file.type == "text/plain":
+        try:
             file_text = uploaded_file.read().decode("utf-8")
-            st.success("✅ Текстовый файл загружен")
+            st.success(f"✅ Загружено: {len(file_text)} символов")
+            if file_text and not st.session_state.contract_txt:
+                st.session_state.contract_txt = file_text
+        except Exception as e:
+            st.error(f"⚠️ Ошибка чтения файла: {str(e)}")
+    
+    # Подсказка для PDF и фото
+    with st.expander("📄 Как работать с PDF и фото документов?"):
+        st.markdown("""
+        **📱 С телефона (быстро):**
+        1. **iPhone:** Откройте фото/PDF → зажмите текст → «Копировать» (Live Text)
+        2. **Android:** Откройте фото → Google Lens → «Текст» → «Копировать»
+        3. Вставьте в поле ниже
         
-        # Автозаполнение поля, если файл прочитан успешно и поле пустое
-        if file_text and not st.session_state.contract_txt:
-            st.session_state.contract_txt = file_text
-
-    # Поле ввода текста (ручное или из файла)
+        **💻 С компьютера:**
+        1. Откройте PDF в браузере
+        2. Выделите текст → Ctrl+C
+        3. Вставьте в поле ниже
+        
+        **🔄 Или сохраните PDF как .txt** и загрузите через кнопку выше
+        """)
+    
+    # Поле ввода текста
     contract_text = st.text_area(
         "Текст договора:", 
         value=st.session_state.contract_txt, 
         height=300, 
         key="area_contract",
-        placeholder="Вставьте текст сюда или загрузите файл выше..."
+        placeholder="Вставьте текст сюда или загрузите .txt файл выше..."
     )
     
     # Синхронизация состояния
@@ -324,7 +303,7 @@ with tab_doc:
     if analyze_btn:
         is_valid, msg = validate_input(contract_text, "contract")
         if not is_valid and "Внимание" in msg:
-             st.warning(msg) # Предупреждение, но не стоп
+             st.warning(msg)
         elif not is_valid:
             st.error(msg)
         else:
@@ -333,12 +312,10 @@ with tab_doc:
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "contract"
             
-            # Индикатор загрузки
             progress_bar = st.progress(0)
             status_text = st.empty()
             loader = st.markdown('<div class="loading-box">⚖️ ИИ изучает пункты договора...</div>', unsafe_allow_html=True)
             
-            # Имитация прогресса для красоты
             for i in range(10):
                 time.sleep(0.1)
                 progress_bar.progress((i + 1) * 10)
@@ -356,7 +333,6 @@ with tab_doc:
                 st.error(error)
             else:
                 st.session_state.result = result
-                # Сохраняем в историю
                 st.session_state.history.insert(0, {"type": "Договор", "preview": contract_text[:50]+"...", "res": result})
                 st.rerun()
 
@@ -369,8 +345,8 @@ with tab_doc:
         with c_dl1:
             st.download_button("📥 Скачать отчет (.txt)", st.session_state.result, "legal_analysis.txt", "text/plain", use_container_width=True)
         with c_dl2:
-            st.copy_to_clipboard(st.session_state.result) # Кнопка копирования (новая фича Streamlit)
-            st.button("📋 Копировать текст", use_container_width=True)
+            if st.button("📋 Копировать текст", use_container_width=True):
+                st.toast("✅ Скопировано в буфер!")
 
 # --- ВКЛАДКА 2: ВОПРОС ---
 with tab_q:
@@ -408,21 +384,19 @@ with tab_q:
     if st.session_state.last_mode == "question" and st.session_state.result:
         st.markdown("### 💡 Консультация")
         st.markdown(st.session_state.result)
-        st.copy_to_clipboard(st.session_state.result)
-        st.button("📋 Копировать ответ", use_container_width=True)
+        if st.button("📋 Копировать ответ", use_container_width=True):
+            st.toast("✅ Скопировано в буфер!")
 
 # =============================================================================
 # FOOTER & HISTORY
 # =============================================================================
 st.divider()
 
-# Блок истории (только если есть записи)
 if st.session_state.history:
     with st.expander("🕒 История текущей сессии", expanded=False):
         for i, item in enumerate(st.session_state.history):
             with st.chat_message("user" if "Вопрос" in item['type'] else "assistant"):
                 st.write(f"**{item['type']}**: {item['preview']}")
-                # Можно добавить кнопку "Показать снова", но пока просто список
 
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.8rem; margin-top: 20px;">
