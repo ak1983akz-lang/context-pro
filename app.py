@@ -43,7 +43,6 @@ def extract_text_from_image(uploaded_file):
     try:
         uploaded_file.seek(0)
         
-        # Пробуем с бесплатным ключом
         api_key = 'helloworld'
         
         response = requests.post(
@@ -66,7 +65,6 @@ def extract_text_from_image(uploaded_file):
                 if text.strip():
                     return text.strip(), None
         
-        # Если не получилось — возвращаем инструкцию
         return None, "API_LIMIT"
         
     except Exception as e:
@@ -141,12 +139,21 @@ h1 { font-size: 1.6rem !important; }
     text-align: center;
     margin: 20px 0;
 }
+.ocr-warning {
+    background: #1e3a5f; 
+    border-left: 4px solid #3b82f6; 
+    padding: 15px; 
+    margin: 15px 0;
+    border-radius: 0 8px 8px 0;
+    color: #fff;
+}
 .manual-hint {
     background: #fff3cd; 
     border-left: 4px solid #ffc107; 
     padding: 15px; 
     margin: 15px 0;
     border-radius: 0 8px 8px 0;
+    color: #000;
 }
 @media (max-width: 768px) {
     .block-container { padding-top: 1rem !important; }
@@ -167,11 +174,11 @@ st.caption("📸 Сфотографируй документ → Получи а
 st.markdown("### ⚖️ Юрисдикция")
 jur = st.radio(
     "Выберите:",
-    ["🇷🇺 РФ — Россия", "🇧 РБ — Беларусь"],
+    ["🇷🇺 РФ — Россия", "🇧🇾 РБ — Беларусь"],
     horizontal=True,
     label_visibility="collapsed"
 )
-st.session_state.jurisdiction = "🇷 РФ" if "РФ" in jur else "🇧🇾 РБ"
+st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧 РБ"
 st.divider()
 
 # ВКЛАДКИ
@@ -181,6 +188,14 @@ tab_photo, tab_manual, tab_question = st.tabs(["📸 Загрузить фото
 with tab_photo:
     st.markdown("#### 📷 Загрузите фото договора")
     st.info("💡 Сделайте фото документа камерой телефона, затем загрузите сюда")
+    
+    # Предупреждение о времени
+    st.markdown("""
+    <div class="ocr-warning">
+    ⏱️ <strong>Важно:</strong> Распознавание текста занимает 10-30 секунд. 
+    Пожалуйста, подождите — индикатор загрузки покажет процесс.
+    </div>
+    """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
         "Нажмите чтобы выбрать фото",
@@ -194,23 +209,42 @@ with tab_photo:
         
         # Кнопка распознавания
         if st.button("🔍 Распознать текст", type="primary", use_container_width=True):
-            with st.spinner("🔄 Распознаю текст..."):
-                text, error = extract_text_from_image(uploaded_file)
-                
-                if text:
-                    st.session_state.contract_txt = text
-                    st.success("✅ Текст распознан! Перейдите вниз для проверки и анализа.")
-                    st.balloons()
+            # Показываем индикатор загрузки
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            st.markdown('<div class="loading-box">🔄 Распознаю текст с фото...<br><small>Это займёт 10-30 секунд</small></div>', unsafe_allow_html=True)
+            
+            # Имитация прогресса
+            for i in range(10):
+                time.sleep(0.3)
+                progress_bar.progress((i + 1) * 10)
+                if i < 3:
+                    status_text.text("📡 Отправка фото на сервер...")
+                elif i < 6:
+                    status_text.text("🔍 Анализ изображения...")
                 else:
-                    st.error("⚠️ Не удалось автоматически распознать текст")
-                    st.markdown("""
-                    <div class="manual-hint">
-                    <strong>📱 Быстрое решение:</strong><br>
-                    • <strong>iPhone:</strong> Откройте это фото → зажмите текст → «Копировать»<br>
-                    • <strong>Android:</strong> Google Lens → «Текст» → «Копировать»<br>
-                    • Затем перейдите во вкладку «✍️ Вставить текст»
-                    </div>
-                    """, unsafe_allow_html=True)
+                    status_text.text("✍️ Извлечение текста...")
+            
+            # Запускаем OCR
+            text, error = extract_text_from_image(uploaded_file)
+            
+            progress_bar.progress(100)
+            status_text.empty()
+            
+            if text:
+                st.session_state.contract_txt = text
+                st.success("✅ Текст распознан! Перейдите вниз для проверки и анализа.")
+            else:
+                st.error("⚠️ Не удалось автоматически распознать текст")
+                st.markdown("""
+                <div class="manual-hint">
+                <strong>📱 Быстрое решение:</strong><br>
+                • <strong>iPhone:</strong> Откройте это фото → зажмите текст → «Копировать»<br>
+                • <strong>Android:</strong> Google Lens → «Текст» → «Копировать»<br>
+                • Затем перейдите во вкладку «✍️ Вставить текст»
+                </div>
+                """, unsafe_allow_html=True)
     
     st.divider()
     st.markdown("### 📝 Распознанный текст")
@@ -240,7 +274,7 @@ with tab_photo:
             jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in st.session_state.jurisdiction else "РБ (ГК РБ)"
             system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}.
 Проанализируй договор и укажи:
-1. 🔍 Ключевые риски (🔴//🟢)
+1. 🔍 Ключевые риски (🔴/🟡/🟢)
 2. ✅ Что хорошо
 3. 📝 Рекомендации
 4. ⚖️ Итог: Безопасно/Требует правок/Опасно"""
@@ -340,7 +374,7 @@ with tab_question:
 st.divider()
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.75rem; padding: 20px;">
-⚖️ Context.Pro Legal |  Фото → Текст → Анализ<br>
+⚖️ Context.Pro Legal | Фото → Текст → Анализ<br>
 Не заменяет консультацию юриста
 </div>
 """, unsafe_allow_html=True)
