@@ -29,7 +29,7 @@ if 'contract_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 if 'jurisdiction' not in st.session_state:
-    st.session_state.jurisdiction = "🇷 РФ"
+    st.session_state.jurisdiction = "🇷🇺 РФ"
 if 'is_analyzing' not in st.session_state:
     st.session_state.is_analyzing = False
 if 'last_mode' not in st.session_state:
@@ -39,7 +39,23 @@ if 'ocr_counter' not in st.session_state:
 if 'ocr_complete' not in st.session_state:
     st.session_state.ocr_complete = False
 if 'show_rules' not in st.session_state:
-    st.session_state.show_rules = False  # ← Для кнопки правил
+    st.session_state.show_rules = False
+if 'question_txt' not in st.session_state:
+    st.session_state.question_txt = ""
+
+# =============================================================================
+# 🔄 ФУНКЦИЯ СБРОСА СЕССИИ
+# =============================================================================
+def reset_session():
+    """Полный сброс всех данных сессии"""
+    st.session_state.contract_txt = ""
+    st.session_state.question_txt = ""
+    st.session_state.result = ""
+    st.session_state.is_analyzing = False
+    st.session_state.last_mode = None
+    st.session_state.ocr_counter = 0
+    st.session_state.ocr_complete = False
+    st.session_state.show_rules = False
 
 # =============================================================================
 # 📸 OCR ЧЕРЕЗ OCR.SPACE
@@ -131,6 +147,12 @@ st.markdown("""
     height: 50px; 
     font-size: 16px;
 }
+.stButton#btn_new_session {
+    background: #dc2626 !important;
+}
+.stButton#btn_new_session:hover {
+    background: #b91c1c !important;
+}
 h1 { font-size: 1.6rem !important; }
 .loading-box {
     background: #1a233a; 
@@ -178,6 +200,7 @@ h1 { font-size: 1.6rem !important; }
     .block-container { padding-top: 1rem !important; }
     h1 { font-size: 1.3rem !important; }
     .stButton>button { width: 100%; }
+    .header-buttons { flex-direction: column; gap: 8px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -186,17 +209,23 @@ h1 { font-size: 1.6rem !important; }
 # 🏗 ИНТЕРФЕЙС
 # =============================================================================
 
-# 1. ШАПКА С КНОПКОЙ ПРАВИЛ
-col_h1, col_h2 = st.columns([4, 1])
+# 1. ШАПКА С КНОПКАМИ
+col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro Legal")
     st.caption("📸 Сфотографируй документ → Получи анализ")
 with col_h2:
-    # ✅ КНОПКА ПРАВИЛ ВОССТАНОВЛЕНА
+    # Кнопка правил
     if st.button("❓ Правила", use_container_width=True, key="btn_rules_toggle"):
         st.session_state.show_rules = not st.session_state.show_rules
+with col_h3:
+    # ✅ КНОПКА НОВАЯ СЕССИЯ
+    if st.button("🔄 Сброс", use_container_width=True, key="btn_new_session", help="Начать новую сессию"):
+        reset_session()
+        st.success("✅ Сессия очищена!")
+        st.rerun()
 
-# 2. БЛОК ПРАВИЛ (показывается если нажали кнопку)
+# 2. БЛОК ПРАВИЛ
 if st.session_state.show_rules:
     st.markdown("""
     <div class="rules-box">
@@ -311,7 +340,7 @@ with tab_photo:
             jur_base = "РФ (ГК РФ, ФЗ)" if "РФ" in st.session_state.jurisdiction else "РБ (ГК РБ)"
             system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}.
 Проанализируй договор и укажи:
-1. 🔍 Ключевые риски (🔴/🟡/🟢)
+1. 🔍 Ключевые риски (🔴//🟢)
 2. ✅ Что хорошо
 3. 📝 Рекомендации
 4. ⚖️ Итог: Безопасно/Требует правок/Опасно"""
@@ -398,10 +427,12 @@ with tab_question:
     
     question = st.text_area(
         "Ваш вопрос:",
+        value=st.session_state.question_txt,
         height=200,
         key="question_area",
         placeholder="Например: Какие риски при расторжении договора аренды?"
     )
+    st.session_state.question_txt = question
     
     if st.button("⚡ Получить ответ", type="primary", use_container_width=True,
                  disabled=len(question.strip()) < 10):
