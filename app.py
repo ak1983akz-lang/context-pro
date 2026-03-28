@@ -4,11 +4,11 @@ import re
 import os
 import time
 import io
-import easyocr
+import base64
 from PIL import Image
 
 # =============================================================================
-# 📱 PWA MANIFEST (для установки как приложения)
+# 📱 PWA MANIFEST
 # =============================================================================
 pwa_manifest = """
 <link rel="manifest" href="application/manifest+json,{
@@ -47,7 +47,7 @@ defaults = {
     'jurisdiction': "🇷🇺 РФ",
     'history': [],
     'show_rules': False,
-    'ocr_language': 'ru'
+    'uploaded_image': None
 }
 
 for key, val in defaults.items():
@@ -55,47 +55,43 @@ for key, val in defaults.items():
         st.session_state[key] = val
 
 # =============================================================================
-# 📸 OCR ФУНКЦИЯ (распознавание текста с фото)
+# 📸 OCR ФУНКЦИЯ (через OCR.space API - бесплатно)
 # =============================================================================
-@st.cache_resource
-def get_ocr_reader():
-    """Инициализируем OCR читер один раз (кэшируем)"""
-    return easyocr.Reader(['ru', 'en'], gpu=False)
-
 def extract_text_from_image(uploaded_file):
-    """Извлекает текст из загруженного изображения"""
+    """Извлекает текст из изображения через OCR.space API"""
     try:
-        # Открываем изображение
-        image = Image.open(uploaded_file)
+        # Конвертируем изображение в base64
+        image_bytes = uploaded_file.read()
         
-        # Показываем прогресс
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        # Отправляем на OCR.space
+        response = requests.post(
+            'https://api.ocr.space/parse/image',
+            files={'file': uploaded_file},
+            data={
+                'apikey': 'helloworld',  # Бесплатный API ключ (до 25000 запросов/мес)
+                'language': 'russian',
+                'isOverlayRequired': 'false',
+                'detectOrientation': 'true',
+                'isTable': 'true'
+            },
+            timeout=60
+        )
         
-        status_text.text("🔄 Загрузка OCR-движка...")
-        progress_bar.progress(20)
+        if response.status_code != 200:
+            return f"⚠️ Ошибка API: {response.status_code}"
         
-        # Инициализируем читер
-        reader = get_ocr_reader()
-        progress_bar.progress(40)
+        data = response.json()
         
-        status_text.text("🔍 Распознавание текста...")
-        progress_bar.progress(60)
+        if data.get('IsErroredOnProcessing'):
+            return f"⚠️ Ошибка OCR: {data.get('ErrorMessage', ['Неизвестная ошибка'])[0]}"
         
-        # Распознаём текст
-        results = reader.readtext(image, detail=0)
-        progress_bar.progress(80)
+        # Извлекаем текст из результата
+        text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
         
-        # Объединяем результаты
-        text = "\n".join(results)
-        progress_bar.progress(100)
+        return text.strip() if text.strip() else "⚠️ Текст не распознан. Попробуйте сделать фото чётче."
         
-        time.sleep(0.5)
-        progress_bar.empty()
-        status_text.empty()
-        
-        return text.strip() if text.strip() else None
-        
+    except requests.exceptions.Timeout:
+        return "⏱ Тайм-аут OCR. Попробуйте ещё раз."
     except Exception as e:
         return f"⚠️ Ошибка OCR: {str(e)}"
 
@@ -302,8 +298,8 @@ with tab_doc:
     
     # Загрузчик изображений
     uploaded_file = st.file_uploader(
-        "📷 Загрузить фото (JPG, PNG, HEIC)", 
-        type=["jpg", "jpeg", "png", "heic"], 
+        "📷 Загрузить фото (JPG, PNG)", 
+        type=["jpg", "jpeg", "png"], 
         help="Сфотографируйте документ и загрузите фото. Текст будет распознан автоматически.",
         key="file_uploader_ocr"
     )
@@ -319,22 +315,25 @@ with tab_doc:
             # Кнопка запуска OCR
             if st.button("🔍 Распознать текст с фото", use_container_width=True, type="primary", disabled=st.session_state.is_processing_ocr):
                 st.session_state.is_processing_ocr = True
+                st.session_state.uploaded_image = uploaded_file
                 st.rerun()
         
         # Если идёт обработка OCR
-        if st.session_state.is_processing_ocr:
+        if st.session_state.is_processing_ocr and st.session_state.uploaded_image:
             st.markdown('<div class="ocr-processing">🔄 Распознавание текста... Это займёт 10-30 секунд</div>', unsafe_allow_html=True)
             
             # Запускаем OCR
-            ocr_text = extract_text_from_image(uploaded_file)
+            ocr_text = extract_text_from_image(st.session_state.uploaded_image)
             
             if ocr_text and not ocr_text.startswith("⚠️"):
                 st.session_state.contract_txt = ocr_text
                 st.session_state.is_processing_ocr = False
+                st.session_state.uploaded_image = None
                 st.markdown('<div class="ocr-success">✅ Текст распознан! Проверьте и редактируйте при необходимости.</div>', unsafe_allow_html=True)
                 st.rerun()
             else:
                 st.session_state.is_processing_ocr = False
+                st.session_state.uploaded_image = None
                 st.error(ocr_text or "❌ Не удалось распознать текст. Попробуйте сделать фото чётче.")
     
     # Поле ввода текста (ручное редактирование после OCR)
@@ -482,7 +481,7 @@ if st.session_state.history:
 
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.8rem; margin-top: 20px;">
-    <p>⚖️ Context.Pro Legal AI | Версия 3.0 (OCR Enabled)</p>
+    <p>⚖️ Context.Pro Legal AI | Версия 3.1 (OCR.space API)</p>
     <p>Не является публичной офертой. Не заменяет живого юриста.</p>
 </div>
 """, unsafe_allow_html=True)
