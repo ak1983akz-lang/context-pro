@@ -37,7 +37,7 @@ if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
 
 # =============================================================================
-# 🔤 КОРРЕКЦИЯ ТЕКСТА
+# 🔤 КОРРЕКЦИЯ ТЕКСТА С ИСПРАВЛЕНИЕМ ОШИБОК
 # =============================================================================
 def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
     api_key = None
@@ -76,59 +76,63 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
             data = response.json()
             corrected = data["choices"][0]["message"]["content"]
             if corrected and corrected.strip():
-                return corrected.strip()
+                # Убираем лишние пробелы и форматирование для сохранности
+                return re.sub(r'\s+', ' ', corrected).strip()
         
         return raw_text
     except:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (УЛУЧШЕННАЯ ДЛЯ МОБИЛЬНЫХ)
+# 📸 OCR (УЛУЧШЕННОЕ КАЧЕСТВО ДЛЯ ВСЕХ ФОТО)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
-        # Сброс позиции файла критически важен для мобильных
         uploaded_file.seek(0)
+        original_bytes = uploaded_file.read()
         
-        # Читаем байты напрямую из буфера
-        file_bytes = uploaded_file.read()
+        if not original_bytes or len(original_bytes) == 0:
+            return None, "Файл пустой"
         
-        # Проверка на пустой файл (частая проблема мобильных браузеров)
-        if not file_bytes or len(file_bytes) == 0:
-            return None, "Файл пустой. Попробуйте выбрать файл заново"
+        max_size = 8 * 1024 * 1024
         
-        max_size = 5 * 1024 * 1024
+        # Оптимизация изображения перед отправкой
+        img = Image.open(io.BytesIO(original_bytes))
         
-        # Автоматическая компрессия если файл большой
-        if len(file_bytes) > max_size:
-            img = Image.open(io.BytesIO(file_bytes))
-            
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                img = background
-            elif img.mode != 'RGB':
-                img = img.convert('RGB')
-            
-            scale = min(1.0, 1920 / max(img.width, img.height))
-            if scale < 1.0:
-                img = img.resize((int(img.width*scale), int(img.height*scale)), Image.Resampling.LANCZOS)
-            
-            img_byte_arr = io.BytesIO()
-            quality = 80
-            while quality >= 20:
-                img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
-                if len(img_byte_arr.getvalue()) <= max_size:
-                    break
-                quality -= 10
-            img_byte_arr.seek(0)
-            
-            file_bytes = img_byte_arr.getvalue()
+        # Конвертация в RGB
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
         
-        # Создание временного файла для API
-        processed_file = io.BytesIO(file_bytes)
+        # Масштабирование для лучшего качества
+        width, height = img.size
+        if width > 1920 or height > 1920:
+            scale = min(1.0, 1920 / max(width, height))
+            img = img.resize((int(width*scale), int(height*scale)), Image.Resampling.LANCZOS)
+        
+        # Повышение резкости и контраста
+        img = img.filter(ImageFilter.SHARPEN)
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(1.5)
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(1.3)
+        
+        # Сохранение в JPEG оптимального качества
+        img_byte_arr = io.BytesIO()
+        quality = 85
+        img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
+        img_byte_arr.seek(0)
+        processed_bytes = img_byte_arr.getvalue()
+        
+        if len(processed_bytes) > max_size:
+            return None, "Файл слишком большой (макс. 8 МБ)"
+        
+        processed_file = io.BytesIO(processed_bytes)
         processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
         processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
         
@@ -140,9 +144,11 @@ def extract_text_from_image(uploaded_file):
                 'language': 'rus',
                 'isOverlayRequired': 'false',
                 'detectOrientation': 'true',
-                'OCREngine': '2'
+                'OCREngine': '2',
+                'scale': 'true',
+                'isTable': 'true'
             },
-            timeout=90
+            timeout=120
         )
         
         if response.status_code == 200:
@@ -155,7 +161,7 @@ def extract_text_from_image(uploaded_file):
                 err = data.get('ErrorMessage', ['Unknown error'])
                 return None, err[0] if isinstance(err, list) else err
         
-        return None, f"Ошибка API: {response.status_code}"
+        return None, f"Ошибка OCR: {response.status_code}"
         
     except Exception as e:
         return None, f"Ошибка обработки: {str(e)}"
@@ -206,13 +212,15 @@ def query_ai(system_prompt: str, user_text: str):
                     {"role": "user", "content": user_text}
                 ],
                 "temperature": 0.2,
-                "max_tokens": 2000
+                "max_tokens": 3000
             },
             timeout=90
         )
         if response.status_code == 200:
             data = response.json()
-            return data["choices"][0]["message"]["content"], None
+            result = data["choices"][0]["message"]["content"]
+            # Очистка текста от лишних символов
+            return re.sub(r'\s+', ' ', result).strip(), None
         return None, "Ошибка сервиса"
     except Exception as e:
         return None, "Ошибка соединения"
@@ -349,7 +357,7 @@ tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"
 # === ФОТО ===
 with tab_photo:
     st.markdown("#### Загрузка фото документа")
-    st.markdown("💡 **Мобильные пользователи:** Откройте Галерею → выберите фото → нажмите загрузить")
+    st.markdown("💡 **Как загрузить:** Откройте Галерею → выберите фото → загрузите")
     
     current_files = st.file_uploader(
         "Выберите фото",
@@ -360,13 +368,11 @@ with tab_photo:
     )
     
     if current_files:
-        # Обработка списков и одиночных файлов
         if isinstance(current_files, list):
             files_to_process = current_files
         else:
             files_to_process = [current_files]
         
-        # Добавляем файлы без дублей
         for f in files_to_process:
             if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
                 st.session_state.uploaded_files_list.append(f)
@@ -395,13 +401,6 @@ with tab_photo:
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
                     
-                    # Попытка 1: прямой доступ к файлу
-                    file.seek(0)
-                    
-                    # Показываем диагностическую информацию
-                    file_info = f"Файл: {getattr(file, 'name', 'unknown')} | Размер: {len(file.read())} байт | Тип: {getattr(file, 'type', 'unknown')}"
-                    
-                    # Повторный сброс после проверки
                     file.seek(0)
                     
                     text, error = extract_text_from_image(file)
@@ -435,16 +434,6 @@ with tab_photo:
                         st.error(f"Все страницы ошиблись:\n{' '.join(errors)}")
                     else:
                         st.error("Текст не распознан ни на одной странице")
-                    
-                    # Показываем подробную инструкцию
-                    st.warning("""
-                    **Проблема с телефоном:**
-                    
-                    1. Убедитесь, что фото четкое и хорошо освещено
-                    2. Файл может быть слишком большим
-                    3. Попробуйте сделать скриншот документа вместо фото
-                    4. Выберите меньшее количество страниц одновременно
-                    """)
 
     st.divider()
     
@@ -514,7 +503,15 @@ with tab_photo:
             st.divider()
             st.markdown("### Полный анализ")
             st.markdown(st.session_state.result)
-            st.download_button("Скачать отчёт", st.session_state.result, "report.txt")
+            
+            # ✅ ИСПРАВЛЕННЫЙ КНОПКУ ЗАГРУЗКИ ОТЧЕТА
+            st.download_button(
+                label="📥 Скачать отчёт",
+                data=st.session_state.result,
+                file_name="legal_analysis.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
     
     elif st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
