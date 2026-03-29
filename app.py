@@ -55,6 +55,64 @@ if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
 
 # =============================================================================
+# 🗜️ СЖАТИЕ ИЗОБРАЖЕНИЯ
+# =============================================================================
+def compress_image(uploaded_file, max_size_kb=800):
+    """
+    Сжимает изображение до нужного размера
+    max_size_kb: максимальный размер в КБ (по умолчанию 800 КБ)
+    """
+    try:
+        # Открываем изображение
+        image = Image.open(uploaded_file)
+        
+        # Конвертируем в RGB если нужно (для HEIC, PNG с прозрачностью и т.д.)
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGB')
+        
+        # Поворачиваем если нужно (по EXIF данным)
+        try:
+            from PIL import ExifTags
+            for orientation in ExifTags.TAGS.keys():
+                if ExifTags.TAGS[orientation] == 'Orientation':
+                    break
+            exif = image._getexif()
+            if exif is not None:
+                orient = exif.get(orientation)
+                if orient == 3:
+                    image = image.rotate(180, expand=True)
+                elif orient == 6:
+                    image = image.rotate(270, expand=True)
+                elif orient == 8:
+                    image = image.rotate(90, expand=True)
+        except:
+            pass  # Если нет EXIF данных — не поворачиваем
+        
+        # Сжимаем с подбором качества
+        quality = 85
+        max_bytes = max_size_kb * 1024
+        
+        while quality > 20:
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='JPEG', quality=quality, optimize=True, resize=(image.width // 2, image.height // 2) if image.width > 2000 else None)
+            if len(img_byte_arr.getvalue()) <= max_bytes:
+                img_byte_arr.seek(0)
+                return img_byte_arr, image.size
+            
+            quality -= 10
+        
+        # Если не получилось — возвращаем с минимальным качеством
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='JPEG', quality=20, optimize=True)
+        img_byte_arr.seek(0)
+        return img_byte_arr, image.size
+        
+    except Exception as e:
+        # Если ошибка — возвращаем оригинал
+        uploaded_file.seek(0)
+        return io.BytesIO(uploaded_file.read()), None
+
+# =============================================================================
 # 🔤 КОРРЕКЦИЯ ТЕКСТА
 # =============================================================================
 def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
@@ -101,19 +159,23 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR
+# 📸 OCR СО СЖАТИЕМ
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
-        uploaded_file.seek(0)
-        file_bytes = uploaded_file.read()
+        # Сжимаем изображение перед отправкой
+        compressed_img, original_size = compress_image(uploaded_file, max_size_kb=800)
         
-        if len(file_bytes) > 5 * 1024 * 1024:
-            return None, "Файл больше 5MB"
+        # Получаем размер сжатого файла
+        compressed_size = len(compressed_img.getvalue())
+        
+        # Проверка размера (макс. 5 МБ для OCR API)
+        if compressed_size > 5 * 1024 * 1024:
+            return None, f"Файл слишком большой ({round(compressed_size/1024/1024, 1)} МБ)"
         
         response = requests.post(
             'https://api.ocr.space/parse/image',
-            files={'file': (uploaded_file.name, file_bytes, uploaded_file.type or 'image/jpeg')},
+            files={'file': (uploaded_file.name, compressed_img, 'image/jpeg')},
             data={
                 'apikey': 'helloworld',
                 'language': 'rus',
@@ -130,8 +192,12 @@ def extract_text_from_image(uploaded_file):
                 text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
                 if text and text.strip():
                     return text.strip(), None
+            else:
+                err = data.get('ErrorMessage', ['Unknown error'])
+                return None, err[0] if isinstance(err, list) else err
         
-        return None, f"Ошибка: {response.status_code}" if response.status_code != 200 else "Текст не распознан"
+        return None, f"Ошибка: {response.status_code}"
+        
     except Exception as e:
         return None, f"Ошибка: {str(e)}"
 
@@ -204,7 +270,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🎨 CSS
+# 🎨 CSS (СКРЫТ ЛИМИТ 200MB)
 # =============================================================================
 st.markdown("""
 <style>
@@ -219,6 +285,14 @@ h1 { font-size: 1.5rem !important; }
 .loading-box { background: #1a233a; border: 2px dashed #D4AF37; color: #D4AF37; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
 .file-info { background: #262730; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #444; }
+
+/* СКРЫТЬ ЛИМИТ 200MB В ЗАГРУЗЧИКЕ ФАЙЛОВ */
+[data-testid="stFileUploader"] small {
+    display: none !important;
+}
+[data-testid="stFileUploaderDropzoneInstructions"] {
+    display: none !important;
+}
 
 /* Карта рисков */
 .risk-cards {
@@ -305,7 +379,7 @@ if st.session_state.show_rules:
         
         **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
         
-        **3.5.** Максимальный размер файла: 5 MB
+        **3.5.** Фото автоматически сжимается для быстрой обработки
         """)
     
     with st.expander("4. Конфиденциальность", expanded=False):
@@ -378,6 +452,7 @@ tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"
 # === ВКЛАДКА 1: ФОТО ===
 with tab_photo:
     st.markdown("#### Загрузите фото документа")
+    st.info("Фото автоматически сжимается для быстрой обработки")
     
     current_files = st.file_uploader(
         "Выберите фото",
@@ -395,7 +470,8 @@ with tab_photo:
         st.success(f"Загружено файлов: {len(st.session_state.uploaded_files_list)}")
         
         for i, f in enumerate(st.session_state.uploaded_files_list):
-            st.markdown(f"<div class='file-info'>Стр. {i+1}: {f.name}</div>", unsafe_allow_html=True)
+            size_kb = round(f.size / 1024, 1)
+            st.markdown(f"<div class='file-info'>Стр. {i+1}: {f.name} ({size_kb} КБ)</div>", unsafe_allow_html=True)
         
         c1, c2 = st.columns(2)
         with c1:
@@ -412,7 +488,7 @@ with tab_photo:
                 
                 total = len(st.session_state.uploaded_files_list)
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
-                    status.text(f"Страница {idx+1}/{total}...")
+                    status.text(f"Страница {idx+1}/{total} (сжатие + OCR)...")
                     file.seek(0)
                     
                     text, error = extract_text_from_image(file)
