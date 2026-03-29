@@ -57,8 +57,6 @@ if 'session_history' not in st.session_state:
     st.session_state.session_history = []
 if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
-if 'full_history_results' not in st.session_state:
-    st.session_state.full_history_results = {}
 
 # =============================================================================
 # 🔤 КОРРЕКЦИЯ ТЕКСТА
@@ -157,6 +155,7 @@ def reset_session():
     st.session_state.show_history = False
     st.session_state.uploaded_files_list = []
     st.session_state.page_texts = {}
+    st.session_state.session_history = []
 
 # =============================================================================
 # 🧠 АНАЛИЗ ДОГОВОРА
@@ -203,47 +202,11 @@ def query_ai(system_prompt: str, user_text: str):
 # 📊 ИЗВЛЕЧЕНИЕ КРАТКИХ ИТОГОВ
 # =============================================================================
 def extract_risk_summary(full_result: str, contract_type: str) -> dict:
-    api_key = get_api_key()
-    if not api_key:
-        return None
-    
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://context-pro.streamlit.app"
-            },
-            json={
-                "model": "deepseek/deepseek-chat",
-                "messages": [
-                    {"role": "system", "content": "Извлеки из текста только цифры и вердикт. Верни JSON: {critical: число, medium: число, low: число, verdict: 'текст'}"},
-                    {"role": "user", "content": f"Извлеки итоги из анализа:\n\n{full_result}"}
-                ],
-                "temperature": 0.1,
-                "max_tokens": 200
-            },
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            text = data["choices"][0]["message"]["content"]
-            return {
-                "critical": text.count("🔴"),
-                "medium": text.count("🟡"),
-                "low": text.count("🟢"),
-                "verdict": "Требует правок" if "требует" in text.lower() else "Нормально"
-            }
-    except:
-        pass
-    
     return {
         "critical": full_result.count("🔴"),
         "medium": full_result.count("🟡"),
         "low": full_result.count("🟢"),
-        "verdict": "Анализ завершён"
+        "verdict": "Требует правок" if "требует" in full_result.lower() else "Нормально"
     }
 
 # =============================================================================
@@ -303,21 +266,12 @@ h1 { font-size: 1.5rem !important; }
 .risk-label { font-size: 0.9rem; opacity: 0.8; }
 
 /* История - кликабельные карточки */
-.history-container {
-    margin: 15px 0;
-}
 .history-card {
     background: #1e2329;
     border-radius: 10px;
     padding: 15px;
     margin: 10px 0;
     border-left: 4px solid #7c3aed;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.history-card:hover {
-    background: #262730;
-    transform: translateX(5px);
 }
 .history-card-header {
     display: flex;
@@ -356,13 +310,12 @@ h1 { font-size: 1.5rem !important; }
     margin-top: 8px;
 }
 
-/* Мобильная адаптация */
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
     .risk-cards { grid-template-columns: 1fr 1fr; }
     .history-card { padding: 12px; }
-    .history-card-header { flex-direction: column; align-items: flex-start; gap: 5px; }
+    .header-col { margin-bottom: 8px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -371,22 +324,25 @@ h1 { font-size: 1.5rem !important; }
 # 🏗 ИНТЕРФЕЙС
 # =============================================================================
 
-# ШАПКА
-col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
+# ШАПКА (исправлено: 3 колонки вместо 4 для мобильной совместимости)
+col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro")
     st.caption("Анализ договоров")
 with col_h2:
-    if st.button("📋 Правила", use_container_width=True, key="btn_rules"):
+    if st.button("📋", use_container_width=True, key="btn_rules", help="Правила"):
         st.session_state.show_rules = not st.session_state.show_rules
 with col_h3:
-    if st.button("📜 История", use_container_width=True, key="btn_history"):
-        st.session_state.show_history = not st.session_state.show_history
-with col_h4:
-    if st.button("🔄 Обновить", use_container_width=True, key="btn_reset"):
+    if st.button("🔄", use_container_width=True, key="btn_reset", help="Обновить"):
         reset_session()
         st.success("✅ Сессия обновлена")
         st.rerun()
+
+# Кнопка истории под шапкой (отдельно, чтобы не перегружать шапку)
+col_hist = st.columns(1)
+with col_hist[0]:
+    if st.button("📜 История сессии", use_container_width=True, key="btn_history"):
+        st.session_state.show_history = not st.session_state.show_history
 
 # ПРАВИЛА ПОЛЬЗОВАНИЯ
 if st.session_state.show_rules:
@@ -457,7 +413,7 @@ if st.session_state.show_rules:
     
     st.divider()
 
-# ИСТОРИЯ СЕССИИ (вместо боковой панели - теперь в основном контенте)
+# ИСТОРИЯ СЕССИИ (исправлено: убран onclick, работают только кнопки Streamlit)
 if st.session_state.show_history:
     st.markdown("### 🕒 История сессии")
     
@@ -465,9 +421,8 @@ if st.session_state.show_history:
         for idx, item in enumerate(st.session_state.session_history):
             icon = "📄" if item["mode"] == "Договор" else "💬"
             
-            # КЛИКАБЕЛЬНАЯ КАРТОЧКА
             st.markdown(f"""
-            <div class="history-card" onclick="document.getElementById('history_{idx}').click()">
+            <div class="history-card">
                 <div class="history-card-header">
                     <div style="display: flex; align-items: center;">
                         <span class="history-card-icon">{icon}</span>
@@ -480,7 +435,7 @@ if st.session_state.show_history:
             </div>
             """, unsafe_allow_html=True)
             
-            # Кнопка для восстановления (скрытая, но рабочая)
+            # Кнопка для восстановления записи
             if st.button(f"📖 Открыть запись #{idx+1}", key=f"history_{idx}", 
                         use_container_width=True, type="secondary"):
                 st.session_state.contract_txt = item.get("full_text", "")
