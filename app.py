@@ -101,20 +101,55 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR
+# 📸 OCR (БЕЗ ЛИМИТОВ ДЛЯ МОБИЛЬНЫХ)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
         
-        # Проверка размера (максимум 5 МБ для OCR API)
-        if len(file_bytes) > 5 * 1024 * 1024:
-            return None, f"Файл слишком большой ({round(len(file_bytes)/1024/1024, 1)} МБ)"
+        # Проверка размера для OCR
+        max_size = 5 * 1024 * 1024  # 5 MB
+        
+        if len(file_bytes) > max_size:
+            # Если слишком большой файл — пытаемся его сжать
+            img = Image.open(io.BytesIO(file_bytes))
+            
+            # Конвертируем в RGB
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Масштабируем если ширина > 1920
+            scale = min(1.0, 1920 / max(img.width, img.height))
+            if scale < 1.0:
+                img = img.resize((int(img.width*scale), int(img.height*scale)), Image.Resampling.LANCZOS)
+            
+            # Сжимаем до JPEG 80% качества
+            img_byte_arr = io.BytesIO()
+            quality = 80
+            while quality >= 20:
+                img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
+                if len(img_byte_arr.getvalue()) <= max_size:
+                    break
+                quality -= 10
+            img_byte_arr.seek(0)
+            
+            file_bytes = img_byte_arr.getvalue()
+        
+        # Отправляем в OCR
+        processed_file = io.BytesIO(file_bytes)
+        processed_file.name = uploaded_file.name
+        processed_file.type = uploaded_file.type or 'image/jpeg'
         
         response = requests.post(
             'https://api.ocr.space/parse/image',
-            files={'file': (uploaded_file.name, file_bytes, uploaded_file.type or 'image/jpeg')},
+            files={'file': (processed_file.name, processed_file, processed_file.type)},
             data={
                 'apikey': 'helloworld',
                 'language': 'rus',
@@ -131,14 +166,11 @@ def extract_text_from_image(uploaded_file):
                 text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
                 if text and text.strip():
                     return text.strip(), None
-            else:
-                err = data.get('ErrorMessage', ['Unknown error'])
-                return None, err[0] if isinstance(err, list) else err
         
-        return None, f"Ошибка: {response.status_code}"
+        return None, "Ошибка распознавания"
         
     except Exception as e:
-        return None, f"Ошибка: {str(e)}"
+        return None, "Ошибка обработки фото"
 
 # =============================================================================
 # 🔄 СБРОС
@@ -193,9 +225,9 @@ def query_ai(system_prompt: str, user_text: str):
         if response.status_code == 200:
             data = response.json()
             return data["choices"][0]["message"]["content"], None
-        return None, f"Ошибка {response.status_code}"
+        return None, "Ошибка сервиса"
     except Exception as e:
-        return None, str(e)
+        return None, "Ошибка соединения"
 
 # =============================================================================
 # 📊 ИЗВЛЕЧЕНИЕ КРАТКИХ ИТОГОВ
@@ -218,13 +250,35 @@ st.markdown("""
 .stButton>button { 
     background: #1f77b4; color: white; font-weight: bold; border-radius: 8px; height: 50px; font-size: 16px; width: 100%;
 }
-.hint-warning {
-    background: #2d1f1f;
-    border-left: 4px solid #f85149;
-    padding: 15px;
-    margin: 10px 0;
-    border-radius: 0 8px 8px 0;
-    font-size: 0.9rem;
+.stFileUploader label { display: none; }
+[data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
+.stFileUploaderDropzone { border: 2px dashed #333; padding: 20px; border-radius: 12px; margin-top: 10px; }
+
+/* Карта рисков */
+.risk-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+.risk-card {
+    background: #1e2329;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    border: 2px solid;
+}
+.risk-card.critical { border-color: #ef4444; }
+.risk-card.medium { border-color: #f59e0b; }
+.risk-card.low { border-color: #22c55e; }
+.risk-card.verdict { border-color: #3b82f6; background: #1e3a5f; }
+.risk-number { font-size: 2.5rem; font-weight: bold; display: block; }
+.risk-label { font-size: 0.9rem; opacity: 0.8; }
+
+@media (max-width: 768px) {
+    .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
+    h1 { font-size: 1.3rem !important; }
+    .risk-cards { grid-template-columns: 1fr 1fr; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -244,73 +298,29 @@ with col_h2:
 with col_h3:
     if st.button("Обновить", use_container_width=True, key="btn_reset"):
         reset_session()
-        st.success("Сессия обновлена")
+        st.success("✅ Готово")
         st.rerun()
 
 # ПРАВИЛА ПОЛЬЗОВАНИЯ
 if st.session_state.show_rules:
     st.markdown("### Правила пользования сервисом")
     
-    with st.expander("1. Назначение сервиса", expanded=True):
+    with st.expander("1. Как пользоваться", expanded=True):
         st.markdown("""
-        **1.1.** Сервис предназначен для анализа юридических документов (договоров, контрактов, соглашений)
+        **1.1.** Выберите юрисдикцию (Россия или Беларусь) — это влияет на применяемые законы
         
-        **1.2.** Пользователь может загрузить фото документа или вставить текст вручную
+        **1.2.** Выберите тип договора для более точного анализа
         
-        **1.3.** Сервис предоставляет рекомендации на основе законодательства РФ или РБ
+        **1.3.** Сфотографируйте документ камерой или загрузите из галереи
+        
+        **1.4.** Нажмите «Распознать» и дождитесь результата (10-30 секунд)
+        
+        **1.5.** Проверьте распознанный текст и нажмите «Анализировать»
         """)
     
-    with st.expander("2. Как пользоваться", expanded=True):
-        st.markdown("""
-        **2.1.** Выберите юрисдикцию (Россия или Беларусь) — это влияет на применяемые законы
-        
-        **2.2.** Выберите тип договора для более точного анализа
-        
-        **2.3.** Перейдите во вкладку «Фото» и загрузите изображение документа
-        
-        **2.4.** Дождитесь распознавания текста (10-30 секунд)
-        
-        **2.5.** Проверьте распознанный текст и при необходимости отредактируйте
-        
-        **2.6.** Нажмите «Анализировать» для получения результатов
-        """)
+    st.warning("**Важно:** Сервис не заменяет консультацию юриста.")
     
-    with st.expander("3. Требования к фото документа", expanded=False):
-        st.markdown("""
-        **3.1.** Фото должно быть чётким, без размытия
-        
-        **3.2.** Текст должен быть хорошо освещён, без теней и бликов
-        
-        **3.3.** Документ должен быть расположен ровно, без перекосов
-        
-        **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
-        """)
-    
-    with st.expander("4. Конфиденциальность", expanded=False):
-        st.markdown("""
-        **4.1.** Загруженные документы не сохраняются на сервере
-        
-        **4.2.** Данные удаляются после завершения сессии
-        
-        **4.3.** Сервис не передаёт данные третьим лицам
-        
-        **4.4.** Не загружайте документы с персональными данными (паспорт, ИНН и т.д.)
-        """)
-    
-    with st.expander("5. Ограничения и отказ от ответственности", expanded=False):
-        st.markdown("""
-        **5.1.** Сервис предоставляет рекомендации информационного характера
-        
-        **5.2.** Результаты анализа не являются юридической консультацией
-        
-        **5.3.** Для важных решений обращайтесь к профессиональным юристам
-        
-        **5.4.** Сервис не несёт ответственности за решения, принятые на основе анализа
-        """)
-    
-    st.warning("**Важно:** Сервис не заменяет очную консультацию юриста. Для сложных случаев и важных сделок обращайтесь к специалистам.")
-    
-    st.info("**Поддержка:** При возникновении вопросов или технических проблем используйте кнопку «Обновить» для начала новой сессии.")
+    st.info("**Поддержка:** Используйте кнопку «Обновить» при проблемах.")
     
     st.divider()
 
@@ -353,30 +363,36 @@ st.divider()
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО ===
+# === ВКЛАДКА 1: ФОТО (УЛУЧШЕННАЯ ДЛЯ МОБИЛЬНЫХ) ===
 with tab_photo:
-    st.markdown("#### Загрузка фото документа")
+    st.markdown("#### 📄 Загрузка фото документа")
     
     current_files = st.file_uploader(
         "Выберите фото",
         type=["jpg", "jpeg", "png"],
-        accept_multiple_files=False,
+        accept_multiple_files=True,
         key=f"up_{st.session_state.ocr_counter}",
-        label_visibility="collapsed"
+        label_visibility="hidden",
+        help="Можно выбрать несколько фото"
     )
     
     if current_files:
-        file_info = current_files
+        # Преобразуем в список для удобства работы
+        if isinstance(current_files, list):
+            files_to_process = current_files
+        else:
+            files_to_process = [current_files]
         
-        # Добавляем файл если его ещё нет
-        if not any(x.name == file_info.name and x.size == file_info.size for x in st.session_state.uploaded_files_list):
-            st.session_state.uploaded_files_list.append(file_info)
+        # Добавляем файлы если их ещё нет
+        for f in files_to_process:
+            if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
+                st.session_state.uploaded_files_list.append(f)
         
-        st.success(f"Загружено файлов: {len(st.session_state.uploaded_files_list)}")
+        st.success(f"✅ Файлов: {len(st.session_state.uploaded_files_list)}")
         
         for i, f in enumerate(st.session_state.uploaded_files_list):
             size_kb = round(f.size / 1024, 1)
-            st.markdown(f"<div class='file-info'>📄 Стр. {i+1}: {f.name} ({size_kb} КБ)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='file-info'>Стр. {i+1}: {f.name} ({size_kb} КБ)</div>", unsafe_allow_html=True)
         
         c1, c2 = st.columns(2)
         with c1:
@@ -405,7 +421,7 @@ with tab_photo:
                         st.session_state.page_texts[idx] = text
                         progress_bar.progress(int((idx+1)/total * 100))
                     else:
-                        st.warning(f"Стр. {idx+1}: {error}")
+                        st.warning(f"Стр. {idx+1}: ошибка")
                 
                 if all_text.strip():
                     status.text("Обработка текста...")
@@ -414,7 +430,7 @@ with tab_photo:
                     st.session_state.contract_txt = corrected
                     st.session_state.ocr_complete = True
                     st.session_state.ocr_counter += 1
-                    st.success(f"Готово! ({len(corrected)} символов)")
+                    st.success(f"✅ Готово! ({len(corrected)} символов)")
                     st.rerun()
                 
                 status.empty()
@@ -456,7 +472,7 @@ with tab_photo:
             else:
                 st.session_state.result = res
                 st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-                st.success("Готово!")
+                st.success("✅ Готово!")
                 st.rerun()
         
         # КАРТА РИСКОВ
