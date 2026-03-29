@@ -101,14 +101,15 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (БЕЗ СЖАТИЯ)
+# 📸 OCR (ОБНОВЛЁН ДЛЯ МОБИЛЬНЫХ)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
+        # Для мобильных устройств важно сбросить позицию файла перед чтением
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
         
-        # Проверка размера (макс. 5 МБ для OCR API)
+        # Проверка размера (максимум 5 МБ для OCR API)
         if len(file_bytes) > 5 * 1024 * 1024:
             return None, f"Файл слишком большой ({round(len(file_bytes)/1024/1024, 1)} МБ). Максимум 5 МБ."
         
@@ -209,7 +210,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🎨 CSS (СКРЫТ ЛИМИТ 200MB)
+# 🎨 CSS (СКРЫТ ЛИМИТ 200MB + МОБИЛЬНАЯ АДАПТАЦИЯ)
 # =============================================================================
 st.markdown("""
 <style>
@@ -316,7 +317,7 @@ if st.session_state.show_rules:
         
         **3.3.** Документ должен быть расположен ровно, без перекосов
         
-        **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
+        **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG, HEIC (iPhone), WEBP
         
         **3.5.** Максимальный размер файла: 5 МБ
         """)
@@ -392,16 +393,25 @@ tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"
 with tab_photo:
     st.markdown("#### Загрузите фото документа")
     
+    # Улучшенный загрузчик для мобильных устройств
     current_files = st.file_uploader(
         "Выберите фото",
-        type=["jpg", "jpeg", "png"],
-        accept_multiple_files=True,
+        type=["jpg", "jpeg", "png", "heic", "heif", "webp"],  # Добавлены форматы для iPhone
+        accept_multiple_files=False,  # На мобильных лучше загружать по одному файлу
         key=f"up_{st.session_state.ocr_counter}",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        help="Загружайте фото с телефона: камера → галерея"
     )
     
     if current_files:
-        for f in current_files:
+        # Если это список файлов (для десктопа) или один файл (для мобильных)
+        if isinstance(current_files, list):
+            files_to_process = current_files
+        else:
+            files_to_process = [current_files]
+        
+        # Фильтрация дубликатов
+        for f in files_to_process:
             if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
                 st.session_state.uploaded_files_list.append(f)
         
@@ -427,6 +437,8 @@ with tab_photo:
                 total = len(st.session_state.uploaded_files_list)
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
+                    
+                    # ✅ ВАЖНО: Всегда сбрасываем позицию файла перед чтением
                     file.seek(0)
                     
                     text, error = extract_text_from_image(file)
