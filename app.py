@@ -45,16 +45,12 @@ if 'ocr_complete' not in st.session_state:
     st.session_state.ocr_complete = False
 if 'show_rules' not in st.session_state:
     st.session_state.show_rules = False
-if 'show_history' not in st.session_state:
-    st.session_state.show_history = False
 if 'question_txt' not in st.session_state:
     st.session_state.question_txt = ""
 if 'uploaded_files_list' not in st.session_state:
     st.session_state.uploaded_files_list = []
 if 'page_texts' not in st.session_state:
     st.session_state.page_texts = {}
-if 'session_history' not in st.session_state:
-    st.session_state.session_history = []
 if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
 
@@ -152,10 +148,8 @@ def reset_session():
     st.session_state.ocr_counter = 0
     st.session_state.ocr_complete = False
     st.session_state.show_rules = False
-    st.session_state.show_history = False
     st.session_state.uploaded_files_list = []
     st.session_state.page_texts = {}
-    st.session_state.session_history = []
 
 # =============================================================================
 # 🧠 АНАЛИЗ ДОГОВОРА
@@ -210,23 +204,6 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 💾 ДОБАВИТЬ В ИСТОРИЮ
-# =============================================================================
-def add_to_history(mode: str, preview: str, timestamp: str, full_result: str = ""):
-    record = {
-        "id": len(st.session_state.session_history),
-        "mode": mode,
-        "preview": preview[:50] + "..." if len(preview) > 50 else preview,
-        "timestamp": timestamp,
-        "type": st.session_state.contract_type if mode == "Договор" else "Вопрос",
-        "full_text": preview,
-        "result": full_result
-    }
-    st.session_state.session_history.insert(0, record)
-    if len(st.session_state.session_history) > 10:
-        st.session_state.session_history = st.session_state.session_history[:10]
-
-# =============================================================================
 # 🎨 CSS
 # =============================================================================
 st.markdown("""
@@ -238,7 +215,6 @@ st.markdown("""
 }
 .stButton#btn_new_session { background: #dc2626 !important; }
 .stButton#btn_rules { background: #2563eb !important; }
-.stButton#btn_history { background: #7c3aed !important; }
 h1 { font-size: 1.5rem !important; }
 .loading-box { background: #1a233a; border: 2px dashed #D4AF37; color: #D4AF37; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
@@ -265,57 +241,10 @@ h1 { font-size: 1.5rem !important; }
 .risk-number { font-size: 2.5rem; font-weight: bold; display: block; }
 .risk-label { font-size: 0.9rem; opacity: 0.8; }
 
-/* История - кликабельные карточки */
-.history-card {
-    background: #1e2329;
-    border-radius: 10px;
-    padding: 15px;
-    margin: 10px 0;
-    border-left: 4px solid #7c3aed;
-}
-.history-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-.history-card-icon {
-    font-size: 1.5rem;
-    margin-right: 10px;
-}
-.history-card-title {
-    font-weight: bold;
-    font-size: 1rem;
-    flex-grow: 1;
-}
-.history-card-time {
-    font-size: 0.75rem;
-    opacity: 0.6;
-    background: #0f1419;
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-.history-card-preview {
-    font-size: 0.85rem;
-    opacity: 0.8;
-    line-height: 1.4;
-}
-.history-card-type {
-    display: inline-block;
-    background: #1f77b4;
-    color: white;
-    font-size: 0.7rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-    margin-top: 8px;
-}
-
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
     .risk-cards { grid-template-columns: 1fr 1fr; }
-    .history-card { padding: 12px; }
-    .header-col { margin-bottom: 8px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -324,31 +253,25 @@ h1 { font-size: 1.5rem !important; }
 # 🏗 ИНТЕРФЕЙС
 # =============================================================================
 
-# ШАПКА (исправлено: 3 колонки вместо 4 для мобильной совместимости)
+# ШАПКА
 col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro")
     st.caption("Анализ договоров")
 with col_h2:
-    if st.button("📋", use_container_width=True, key="btn_rules", help="Правила"):
+    if st.button("Правила", use_container_width=True, key="btn_rules"):
         st.session_state.show_rules = not st.session_state.show_rules
 with col_h3:
-    if st.button("🔄", use_container_width=True, key="btn_reset", help="Обновить"):
+    if st.button("Обновить", use_container_width=True, key="btn_reset"):
         reset_session()
-        st.success("✅ Сессия обновлена")
+        st.success("Сессия обновлена")
         st.rerun()
-
-# Кнопка истории под шапкой (отдельно, чтобы не перегружать шапку)
-col_hist = st.columns(1)
-with col_hist[0]:
-    if st.button("📜 История сессии", use_container_width=True, key="btn_history"):
-        st.session_state.show_history = not st.session_state.show_history
 
 # ПРАВИЛА ПОЛЬЗОВАНИЯ
 if st.session_state.show_rules:
-    st.markdown("### 📜 Правила пользования сервисом")
+    st.markdown("### Правила пользования сервисом")
     
-    with st.expander("1️⃣ Назначение сервиса", expanded=True):
+    with st.expander("1. Назначение сервиса", expanded=True):
         st.markdown("""
         **1.1.** Сервис предназначен для анализа юридических документов (договоров, контрактов, соглашений)
         
@@ -357,22 +280,22 @@ if st.session_state.show_rules:
         **1.3.** Сервис предоставляет рекомендации на основе законодательства РФ или РБ
         """)
     
-    with st.expander("2️⃣ Как пользоваться", expanded=True):
+    with st.expander("2. Как пользоваться", expanded=True):
         st.markdown("""
         **2.1.** Выберите юрисдикцию (Россия или Беларусь) — это влияет на применяемые законы
         
         **2.2.** Выберите тип договора для более точного анализа
         
-        **2.3.** Перейдите во вкладку «📸 Фото» и загрузите изображение документа
+        **2.3.** Перейдите во вкладку «Фото» и загрузите изображение документа
         
         **2.4.** Дождитесь распознавания текста (10-30 секунд)
         
         **2.5.** Проверьте распознанный текст и при необходимости отредактируйте
         
-        **2.6.** Нажмите «🚀 Анализировать» для получения результатов
+        **2.6.** Нажмите «Анализировать» для получения результатов
         """)
     
-    with st.expander("3️⃣ Требования к фото документа", expanded=False):
+    with st.expander("3. Требования к фото документа", expanded=False):
         st.markdown("""
         **3.1.** Фото должно быть чётким, без размытия
         
@@ -385,7 +308,7 @@ if st.session_state.show_rules:
         **3.5.** Максимальный размер файла: 5 MB
         """)
     
-    with st.expander("4️⃣ Конфиденциальность", expanded=False):
+    with st.expander("4. Конфиденциальность", expanded=False):
         st.markdown("""
         **4.1.** Загруженные документы не сохраняются на сервере
         
@@ -396,7 +319,7 @@ if st.session_state.show_rules:
         **4.4.** Не загружайте документы с персональными данными (паспорт, ИНН и т.д.)
         """)
     
-    with st.expander("5️⃣ Ограничения и отказ от ответственности", expanded=False):
+    with st.expander("5. Ограничения и отказ от ответственности", expanded=False):
         st.markdown("""
         **5.1.** Сервис предоставляет рекомендации информационного характера
         
@@ -407,51 +330,9 @@ if st.session_state.show_rules:
         **5.4.** Сервис не несёт ответственности за решения, принятые на основе анализа
         """)
     
-    st.warning("⚠️ **Важно:** Сервис не заменяет очную консультацию юриста. Для сложных случаев и важных сделок обращайтесь к специалистам.")
+    st.warning("**Важно:** Сервис не заменяет очную консультацию юриста. Для сложных случаев и важных сделок обращайтесь к специалистам.")
     
-    st.info("ℹ️ **Поддержка:** При возникновении вопросов или технических проблем используйте кнопку «🔄 Обновить» для начала новой сессии.")
-    
-    st.divider()
-
-# ИСТОРИЯ СЕССИИ (исправлено: убран onclick, работают только кнопки Streamlit)
-if st.session_state.show_history:
-    st.markdown("### 🕒 История сессии")
-    
-    if st.session_state.session_history:
-        for idx, item in enumerate(st.session_state.session_history):
-            icon = "📄" if item["mode"] == "Договор" else "💬"
-            
-            st.markdown(f"""
-            <div class="history-card">
-                <div class="history-card-header">
-                    <div style="display: flex; align-items: center;">
-                        <span class="history-card-icon">{icon}</span>
-                        <span class="history-card-title">{item["type"]}</span>
-                    </div>
-                    <span class="history-card-time">{item["timestamp"]}</span>
-                </div>
-                <div class="history-card-preview">{item["preview"]}</div>
-                <span class="history-card-type">{item["mode"]}</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Кнопка для восстановления записи
-            if st.button(f"📖 Открыть запись #{idx+1}", key=f"history_{idx}", 
-                        use_container_width=True, type="secondary"):
-                st.session_state.contract_txt = item.get("full_text", "")
-                st.session_state.result = item.get("result", "")
-                st.session_state.last_mode = "contract" if item["mode"] == "Договор" else "question"
-                st.session_state.contract_type = item.get("type", "Другое")
-                st.session_state.show_history = False
-                st.success(f"✅ Запись #{idx+1} восстановлена!")
-                st.rerun()
-    else:
-        st.info("📭 История пуста\n\nЗдесь появятся ваши последние анализы")
-    
-    if st.button("🗑️ Очистить историю", use_container_width=True, type="secondary"):
-        st.session_state.session_history = []
-        st.success("✅ История очищена")
-        st.rerun()
+    st.info("**Поддержка:** При возникновении вопросов или технических проблем используйте кнопку «Обновить» для начала новой сессии.")
     
     st.divider()
 
@@ -459,7 +340,7 @@ if st.session_state.show_history:
 col_jur, col_type = st.columns(2)
 
 with col_jur:
-    st.markdown("**⚖️ Юрисдикция:**")
+    st.markdown("**Юрисдикция:**")
     jur_option = st.selectbox(
         "Законодательство:",
         options=["🇷🇺 Россия", "🇧🇾 Беларусь"],
@@ -470,7 +351,7 @@ with col_jur:
     st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
 
 with col_type:
-    st.markdown("**📋 Тип договора:**")
+    st.markdown("**Тип договора:**")
     contract_type = st.selectbox(
         "Выберите тип:",
         options=[
@@ -492,11 +373,11 @@ with col_type:
 st.divider()
 
 # ВКЛАДКИ
-tab_photo, tab_manual, tab_q = st.tabs(["📸 Фото", "✍️ Текст", "💬 Вопрос"])
+tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
 # === ВКЛАДКА 1: ФОТО ===
 with tab_photo:
-    st.markdown("#### 📷 Загрузите фото документа")
+    st.markdown("#### Загрузите фото документа")
     
     current_files = st.file_uploader(
         "Выберите фото",
@@ -511,23 +392,23 @@ with tab_photo:
             if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
                 st.session_state.uploaded_files_list.append(f)
         
-        st.success(f"✅ Загружено файлов: {len(st.session_state.uploaded_files_list)}")
+        st.success(f"Загружено файлов: {len(st.session_state.uploaded_files_list)}")
         
         for i, f in enumerate(st.session_state.uploaded_files_list):
-            st.markdown(f"<div class='file-info'>📄 Стр. {i+1}: {f.name}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='file-info'>Стр. {i+1}: {f.name}</div>", unsafe_allow_html=True)
         
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🗑️ Очистить", key="clear_q"):
+            if st.button("Очистить", key="clear_q"):
                 st.session_state.uploaded_files_list = []
                 st.rerun()
         with c2:
-            if st.button("🔍 Распознать", type="primary", key="btn_ocr_go"):
+            if st.button("Распознать", type="primary", key="btn_ocr_go"):
                 progress_bar = st.progress(0)
                 status = st.empty()
                 all_text = ""
                 
-                st.markdown('<div class="loading-box">🔄 Распознавание текста...</div>', unsafe_allow_html=True)
+                st.markdown('<div class="loading-box">Распознавание текста...</div>', unsafe_allow_html=True)
                 
                 total = len(st.session_state.uploaded_files_list)
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
@@ -551,7 +432,7 @@ with tab_photo:
                     st.session_state.contract_txt = corrected
                     st.session_state.ocr_complete = True
                     st.session_state.ocr_counter += 1
-                    st.success(f"✅ Готово! ({len(corrected)} символов)")
+                    st.success(f"Готово! ({len(corrected)} символов)")
                     st.rerun()
                 
                 status.empty()
@@ -560,7 +441,7 @@ with tab_photo:
     st.divider()
     
     if st.session_state.ocr_complete and st.session_state.contract_txt:
-        st.markdown("### 📝 Текст документа")
+        st.markdown("### Текст документа")
         
         txt = st.text_area(
             "Текст:", 
@@ -571,18 +452,18 @@ with tab_photo:
         )
         st.session_state.contract_txt = txt
         
-        if st.button("🚀 Анализировать", type="primary", disabled=len(txt)<50):
+        if st.button("Анализировать", type="primary", disabled=len(txt)<50):
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "contract"
-            st.markdown('<div class="loading-box">⚖️ Анализ договора...</div>', unsafe_allow_html=True)
+            st.markdown('<div class="loading-box">Анализ договора...</div>', unsafe_allow_html=True)
             
             jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
             prompt = f"""Юрист-эксперт по праву {jur_base}. Тип договора: {st.session_state.contract_type}.
 Проанализируй договор и укажи:
-1. 🔍 Ключевые риски с уровнем опасности (🔴 Критический / 🟡 Средний / 🟢 Низкий)
-2. ✅ Что составлено грамотно
-3. 📝 Рекомендации по изменению пунктов
-4. ⚖️ Итоговый вердикт (Безопасно / Требует правок / Опасно)
+1. Ключевые риски с уровнем опасности (🔴 Критический / 🟡 Средний / 🟢 Низкий)
+2. Что составлено грамотно
+3. Рекомендации по изменению пунктов
+4. Итоговый вердикт (Безопасно / Требует правок / Опасно)
 
 Используй эмодзи 🔴🟡🟢 для маркировки рисков."""
             
@@ -593,14 +474,13 @@ with tab_photo:
             else:
                 st.session_state.result = res
                 st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-                add_to_history("Договор", txt, datetime.now().strftime("%H:%M"), res)
-                st.success("✅ Готово!")
+                st.success("Готово!")
                 st.rerun()
         
-        # 📊 КАРТА РИСКОВ
+        # КАРТА РИСКОВ
         if st.session_state.result and st.session_state.risk_summary:
             st.divider()
-            st.markdown("### 📊 Карта рисков")
+            st.markdown("### Карта рисков")
             
             summary = st.session_state.risk_summary
             
@@ -608,50 +488,50 @@ with tab_photo:
             <div class="risk-cards">
                 <div class="risk-card critical">
                     <span class="risk-number" style="color: #ef4444;">{summary['critical']}</span>
-                    <span class="risk-label">🔴 Критических</span>
+                    <span class="risk-label">Критических</span>
                 </div>
                 <div class="risk-card medium">
                     <span class="risk-number" style="color: #f59e0b;">{summary['medium']}</span>
-                    <span class="risk-label">🟡 Средних</span>
+                    <span class="risk-label">Средних</span>
                 </div>
                 <div class="risk-card low">
                     <span class="risk-number" style="color: #22c55e;">{summary['low']}</span>
-                    <span class="risk-label">🟢 В норме</span>
+                    <span class="risk-label">В норме</span>
                 </div>
                 <div class="risk-card verdict">
                     <span class="risk-number" style="color: #3b82f6; font-size: 1.2rem;">{summary['verdict']}</span>
-                    <span class="risk-label">⚖️ Вердикт</span>
+                    <span class="risk-label">Вердикт</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             
             st.divider()
-            st.markdown("### 📄 Полный анализ")
+            st.markdown("### Полный анализ")
             st.markdown(st.session_state.result)
-            st.download_button("📥 Скачать отчёт", st.session_state.result, "report.txt")
+            st.download_button("Скачать отчёт", st.session_state.result, "report.txt")
     
     elif st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
             st.divider()
-            st.markdown("### 📊 Карта рисков")
+            st.markdown("### Карта рисков")
             summary = st.session_state.risk_summary
             st.markdown(f"""
             <div class="risk-cards">
                 <div class="risk-card critical">
                     <span class="risk-number" style="color: #ef4444;">{summary['critical']}</span>
-                    <span class="risk-label">🔴 Критических</span>
+                    <span class="risk-label">Критических</span>
                 </div>
                 <div class="risk-card medium">
                     <span class="risk-number" style="color: #f59e0b;">{summary['medium']}</span>
-                    <span class="risk-label">🟡 Средних</span>
+                    <span class="risk-label">Средних</span>
                 </div>
                 <div class="risk-card low">
                     <span class="risk-number" style="color: #22c55e;">{summary['low']}</span>
-                    <span class="risk-label">🟢 В норме</span>
+                    <span class="risk-label">В норме</span>
                 </div>
                 <div class="risk-card verdict">
                     <span class="risk-number" style="color: #3b82f6; font-size: 1.2rem;">{summary['verdict']}</span>
-                    <span class="risk-label">⚖️ Вердикт</span>
+                    <span class="risk-label">Вердикт</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -660,47 +540,46 @@ with tab_photo:
 
 # === ВКЛАДКА 2: РУЧНОЙ ВВОД ===
 with tab_manual:
-    st.markdown("#### ✍️ Вставьте текст")
+    st.markdown("#### Вставьте текст")
     txt = st.text_area("Текст:", value=st.session_state.contract_txt, height=400, key="man_area", label_visibility="collapsed")
     st.session_state.contract_txt = txt
-    if st.button("🚀 Анализ", disabled=len(txt)<50):
+    if st.button("Анализ", disabled=len(txt)<50):
         st.session_state.last_mode = "contract"
-        st.markdown('<div class="loading-box">⚖️ Анализ...</div>', unsafe_allow_html=True)
+        st.markdown('<div class="loading-box">Анализ...</div>', unsafe_allow_html=True)
         jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
         prompt = f"""Юрист-эксперт по праву {jur_base}. Тип договора: {st.session_state.contract_type}.
 Проанализируй договор:
-1. 🔍 Риски (🔴//🟢)
-2. ✅ Плюсы
-3. 📝 Рекомендации
-4. ⚖️ Итог"""
+1. Риски (🔴/🟡/🟢)
+2. Плюсы
+3. Рекомендации
+4. Итог"""
         res, err = query_ai(prompt, txt)
         if not err:
             st.session_state.result = res
             st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-            add_to_history("Договор", txt, datetime.now().strftime("%H:%M"), res)
             st.rerun()
     if st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
             st.divider()
-            st.markdown("### 📊 Карта рисков")
+            st.markdown("### Карта рисков")
             summary = st.session_state.risk_summary
             st.markdown(f"""
             <div class="risk-cards">
                 <div class="risk-card critical">
                     <span class="risk-number" style="color: #ef4444;">{summary['critical']}</span>
-                    <span class="risk-label">🔴 Критических</span>
+                    <span class="risk-label">Критических</span>
                 </div>
                 <div class="risk-card medium">
                     <span class="risk-number" style="color: #f59e0b;">{summary['medium']}</span>
-                    <span class="risk-label">🟡 Средних</span>
+                    <span class="risk-label">Средних</span>
                 </div>
                 <div class="risk-card low">
                     <span class="risk-number" style="color: #22c55e;">{summary['low']}</span>
-                    <span class="risk-label">🟢 В норме</span>
+                    <span class="risk-label">В норме</span>
                 </div>
                 <div class="risk-card verdict">
                     <span class="risk-number" style="color: #3b82f6; font-size: 1.2rem;">{summary['verdict']}</span>
-                    <span class="risk-label">⚖️ Вердикт</span>
+                    <span class="risk-label">Вердикт</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -709,17 +588,16 @@ with tab_manual:
 
 # === ВКЛАДКА 3: ВОПРОС ===
 with tab_q:
-    st.markdown("#### 💬 Юридический вопрос")
+    st.markdown("#### Юридический вопрос")
     q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=200, key="q_ar", label_visibility="collapsed")
     st.session_state.question_txt = q
-    if st.button("⚡ Получить ответ", disabled=len(q)<5):
-        st.markdown('<div class="loading-box">⏳ Обработка...</div>', unsafe_allow_html=True)
+    if st.button("Получить ответ", disabled=len(q)<5):
+        st.markdown('<div class="loading-box">Обработка...</div>', unsafe_allow_html=True)
         jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
-            add_to_history("Вопрос", q, datetime.now().strftime("%H:%M"), res)
             st.divider()
-            st.markdown("### 💡 Ответ")
+            st.markdown("### Ответ")
             st.markdown(res)
 
 # FOOTER
