@@ -48,14 +48,58 @@ if 'uploaded_files_list' not in st.session_state:
     st.session_state.uploaded_files_list = []
 if 'page_texts' not in st.session_state:
     st.session_state.page_texts = {}
-if 'corrected_txt' not in st.session_state:
-    st.session_state.corrected_txt = ""
 
 # =============================================================================
-#  OCR (Простое распознавание)
+# 🔤 КОРРЕКЦИЯ ТЕКСТА (внутренняя функция)
+# =============================================================================
+def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
+    """Внутренняя обработка текста для улучшения читаемости"""
+    api_key = None
+    try:
+        if "openrouter" in st.secrets:
+            api_key = st.secrets["openrouter"]["api_key"]
+    except:
+        pass
+    
+    if not api_key or len(raw_text) < 50:
+        return raw_text
+    
+    try:
+        jur_base = "Российская Федерация" if "РФ" in jurisdiction else "Республика Беларусь"
+        
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://context-pro.streamlit.app"
+            },
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки распознавания в тексте, не меняя смысл. Верни только исправленный текст."},
+                    {"role": "user", "content": f"Исправь ошибки в тексте:\n\n{raw_text}"}
+                ],
+                "temperature": 0.1,
+                "max_tokens": 3000
+            },
+            timeout=120
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            corrected = data["choices"][0]["message"]["content"]
+            if corrected and corrected.strip():
+                return corrected.strip()
+        
+        return raw_text
+    except:
+        return raw_text
+
+# =============================================================================
+# 📸 OCR
 # =============================================================================
 def extract_text_from_image(uploaded_file):
-    """Базовое распознавание текста"""
     try:
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
@@ -84,76 +128,8 @@ def extract_text_from_image(uploaded_file):
                     return text.strip(), None
         
         return None, f"Ошибка: {response.status_code}" if response.status_code != 200 else "Текст не распознан"
-        
     except Exception as e:
         return None, f"Ошибка: {str(e)}"
-
-# =============================================================================
-# 🧠 ИИ-КОРРЕКЦИЯ ТЕКСТА (По смыслу!)
-# =============================================================================
-def correct_text_with_ai(raw_text: str, jurisdiction: str) -> tuple:
-    """
-    ИИ исправляет ошибки OCR на основе юридического контекста
-    Пример: "аревтододатя" → "арендодатель"
-    """
-    api_key = None
-    try:
-        if "openrouter" in st.secrets:
-            api_key = st.secrets["openrouter"]["api_key"]
-    except:
-        pass
-    
-    if not api_key:
-        return raw_text, None
-    
-    try:
-        jur_base = "Российская Федерация (ГК РФ, ФЗ)" if "РФ" in jurisdiction else "Республика Беларусь (ГК РБ)"
-        
-        system_prompt = f"""Ты — профессиональный юрист и редактор юридических документов.
-Юрисдикция: {jur_base}
-
-ЗАДАЧА: Исправь ошибки распознавания текста (OCR) в договоре, НЕ меняя смысл.
-
-ПРАВИЛА:
-1. Исправляй очевидные ошибки: "аревтододатя" → "арендодатель", "договОр" → "договор"
-2. Восстанавливай пропущенные буквы по контексту
-3. Исправляй цифры: "2O2O" → "2020", "01.O1.2024" → "01.01.2024"
-4. Сохраняй структуру документа (пункты, разделы)
-5. НЕ меняй юридические термины и названия
-6. НЕ добавляй новый текст, только исправляй ошибки
-7. Если слово непонятное — оставь как есть
-
-ФОРМАТ ОТВЕТА: Только исправленный текст, без комментариев."""
-
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://context-pro.streamlit.app"
-            },
-            json={
-                "model": "deepseek/deepseek-chat",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Исправь ошибки OCR в тексте:\n\n{raw_text}"}
-                ],
-                "temperature": 0.1,  # Минимальная креативность для точности
-                "max_tokens": 3000
-            },
-            timeout=120
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            corrected = data["choices"][0]["message"]["content"]
-            if corrected and corrected.strip():
-                return corrected.strip(), None
-        
-        return raw_text, None  # Если ошибка — возвращаем оригинал
-        
-    except Exception as e:
-        return raw_text, None
 
 # =============================================================================
 # 🔄 СБРОС
@@ -162,7 +138,6 @@ def reset_session():
     st.session_state.contract_txt = ""
     st.session_state.question_txt = ""
     st.session_state.result = ""
-    st.session_state.corrected_txt = ""
     st.session_state.is_analyzing = False
     st.session_state.last_mode = None
     st.session_state.ocr_counter = 0
@@ -172,7 +147,7 @@ def reset_session():
     st.session_state.page_texts = {}
 
 # =============================================================================
-# 🧠 AI АНАЛИЗ ДОГОВОРА
+# 🧠 АНАЛИЗ ДОГОВОРА
 # =============================================================================
 def get_api_key():
     try:
@@ -227,7 +202,6 @@ h1 { font-size: 1.5rem !important; }
 .loading-box { background: #1a233a; border: 2px dashed #D4AF37; color: #D4AF37; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
 .file-info { background: #262730; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #444; }
-.diff-box { background: #2d2d44; padding: 15px; border-radius: 8px; margin: 10px 0; font-family: monospace; font-size: 13px; }
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
@@ -240,7 +214,7 @@ h1 { font-size: 1.5rem !important; }
 # =============================================================================
 
 st.title("⚖️ Context.Pro")
-st.caption("🧠 ИИ-коррекция ошибок OCR")
+st.caption("Анализ договоров")
 
 col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
 with col_h1:
@@ -254,7 +228,7 @@ with col_h3:
         st.rerun()
 
 if st.session_state.show_rules:
-    st.info("📜 Загрузите фото → OCR распознает → ИИ исправит ошибки по смыслу → Анализ")
+    st.info("📜 Загрузите фото документа → Текст будет распознан → Получите анализ")
 
 st.divider()
 
@@ -267,7 +241,6 @@ tab_photo, tab_manual, tab_q = st.tabs(["📸 Фото", "✍️ Текст", "�
 # === ВКЛАДКА 1: ФОТО ===
 with tab_photo:
     st.markdown("#### 📷 Загрузите фото документа")
-    st.info("🧠 ИИ автоматически исправит ошибки распознавания по юридическому контексту")
     
     current_files = st.file_uploader(
         "Выберите фото",
@@ -293,12 +266,12 @@ with tab_photo:
                 st.session_state.uploaded_files_list = []
                 st.rerun()
         with c2:
-            if st.button("🔍 Распознать + Исправить", type="primary", key="btn_ocr_go"):
+            if st.button("🔍 Распознать", type="primary", key="btn_ocr_go"):
                 progress_bar = st.progress(0)
                 status = st.empty()
                 all_text = ""
                 
-                st.markdown('<div class="loading-box">🔄 Шаг 1/2: Распознавание текста...</div>', unsafe_allow_html=True)
+                st.markdown('<div class="loading-box">🔄 Распознавание текста...</div>', unsafe_allow_html=True)
                 
                 total = len(st.session_state.uploaded_files_list)
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
@@ -311,43 +284,20 @@ with tab_photo:
                         header = f"\n\n--- СТРАНИЦА {idx+1} ---\n\n" if idx > 0 else ""
                         all_text += header + text
                         st.session_state.page_texts[idx] = text
-                        progress_bar.progress(int((idx+1)/total * 50))  # 50% на OCR
+                        progress_bar.progress(int((idx+1)/total * 100))
                     else:
                         st.warning(f"Стр. {idx+1}: {error}")
                 
-                # Шаг 2: ИИ-коррекция
+                # Обработка текста
                 if all_text.strip():
-                    st.markdown('<div class="loading-box">🧠 Шаг 2/2: ИИ исправляет ошибки по смыслу...</div>', unsafe_allow_html=True)
-                    status.text("ИИ-коррекция юридических терминов...")
+                    status.text("Обработка текста...")
+                    corrected = correct_text_smart(all_text, st.session_state.jurisdiction)
                     
-                    corrected_text, corr_error = correct_text_with_ai(all_text, st.session_state.jurisdiction)
-                    
-                    if corrected_text:
-                        st.session_state.contract_txt = corrected_text
-                        st.session_state.corrected_txt = corrected_text
-                        st.session_state.ocr_complete = True
-                        st.session_state.ocr_counter += 1
-                        
-                        # Показываем что было исправлено
-                        if len(corrected_text) != len(all_text):
-                            st.markdown(f"""
-                            <div class="success-box">
-                            ✅ <b>Готово!</b><br>
-                            📊 Распознано: {len(all_text)} символов<br>
-                            ✨ После ИИ-коррекции: {len(corrected_text)} символов<br>
-                            🧠 Ошибки исправлены по юридическому контексту
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.success(f"✅ Распознано! ({len(corrected_text)} символов)")
-                        
-                        st.rerun()
-                    else:
-                        st.session_state.contract_txt = all_text
-                        st.session_state.ocr_complete = True
-                        st.session_state.ocr_counter += 1
-                        st.warning("⚠️ ИИ-коррекция не сработала, используем оригинальный текст")
-                        st.rerun()
+                    st.session_state.contract_txt = corrected
+                    st.session_state.ocr_complete = True
+                    st.session_state.ocr_counter += 1
+                    st.success(f"✅ Готово! ({len(corrected)} символов)")
+                    st.rerun()
                 
                 status.empty()
                 progress_bar.empty()
@@ -355,21 +305,10 @@ with tab_photo:
     st.divider()
     
     if st.session_state.ocr_complete and st.session_state.contract_txt:
-        # Показываем оригинал и исправленный текст
         st.markdown("### 📝 Текст документа")
         
-        if st.session_state.corrected_txt and st.session_state.corrected_txt != st.session_state.contract_txt:
-            with st.expander("🔍 Показать что было исправлено ИИ", expanded=False):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("**До коррекции:**")
-                    st.text_area("Оригинал", value=st.session_state.contract_txt, height=300, disabled=True, key="orig_txt")
-                with col2:
-                    st.markdown("**После ИИ-коррекции:**")
-                    st.text_area("Исправлено", value=st.session_state.corrected_txt, height=300, disabled=True, key="corr_txt")
-        
         txt = st.text_area(
-            "Текст (можно редактировать):", 
+            "Текст:", 
             value=st.session_state.contract_txt, 
             height=400, 
             key=f"area_{st.session_state.ocr_counter}",
@@ -380,7 +319,7 @@ with tab_photo:
         if st.button("🚀 Анализировать", type="primary", disabled=len(txt)<50):
             st.session_state.is_analyzing = True
             st.session_state.last_mode = "contract"
-            st.markdown('<div class="loading-box">⚖️ Анализирую договор...</div>', unsafe_allow_html=True)
+            st.markdown('<div class="loading-box">⚖️ Анализ договора...</div>', unsafe_allow_html=True)
             
             jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
             prompt = f"""Юрист-эксперт по праву {jur_base}.
@@ -430,7 +369,7 @@ with tab_q:
     q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=200, key="q_ar", label_visibility="collapsed")
     st.session_state.question_txt = q
     if st.button("⚡ Получить ответ", disabled=len(q)<5):
-        st.markdown('<div class="loading-box">🧠 Готовлю ответ...</div>', unsafe_allow_html=True)
+        st.markdown('<div class="loading-box">⏳ Обработка...</div>', unsafe_allow_html=True)
         jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
@@ -439,4 +378,4 @@ with tab_q:
             st.markdown(res)
 
 st.divider()
-st.caption("⚖️ Context.Pro Legal | 🧠 ИИ-коррекция ошибок")
+st.caption("⚖️ Context.Pro Legal")
