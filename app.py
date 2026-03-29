@@ -203,65 +203,6 @@ h1 { font-size: 1.5rem !important; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
 .file-info { background: #262730; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #444; }
 
-/* Правила пользования */
-.rules-container {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 20px;
-    margin: 20px 0;
-}
-.rules-section {
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #30363d;
-}
-.rules-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
-}
-.rules-title {
-    color: #58a6ff;
-    font-size: 1.1rem;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-.rules-item {
-    display: flex;
-    align-items: flex-start;
-    margin-bottom: 8px;
-    font-size: 0.9rem;
-    line-height: 1.5;
-}
-.rules-number {
-    background: #1f77b4;
-    color: white;
-    min-width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 10px;
-    font-size: 0.8rem;
-    font-weight: bold;
-}
-.rules-warning {
-    background: #2d1f1f;
-    border-left: 4px solid #f85149;
-    padding: 15px;
-    border-radius: 0 8px 8px 0;
-    margin: 15px 0;
-}
-.rules-info {
-    background: #1f2937;
-    border-left: 4px solid #3b82f6;
-    padding: 15px;
-    border-radius: 0 8px 8px 0;
-    margin: 15px 0;
-}
-
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
@@ -288,75 +229,86 @@ with col_h3:
         st.success("✅ Сессия обновлена")
         st.rerun()
 
-# ПРАВИЛА ПОЛЬЗОВАНИЯ
+# ПРАВИЛА ПОЛЬЗОВАНИЯ (через нативные компоненты Streamlit)
 if st.session_state.show_rules:
-    st.markdown("""
-    <div class="rules-container">
-        <h2 style="color: #fff; margin-top: 0;">📜 Правила пользования сервисом</h2>
+    st.markdown("### 📜 Правила пользования сервисом")
+    
+    with st.expander("1️⃣ Назначение сервиса", expanded=True):
+        st.markdown("""
+        **1.1.** Сервис предназначен для анализа юридических документов (договоров, контрактов, соглашений)
         
-        <div class="rules-section">
-            <div class="rules-title">1️⃣ Назначение сервиса</div>
-            <div class="rules-item"><span class="rules-number">1.1</span><span>Сервис предназначен для анализа юридических документов (договоров, контрактов, соглашений)</span></div>
-            <div class="rules-item"><span class="rules-number">1.2</span><span>Пользователь может загрузить фото документа или вставить текст вручную</span></div>
-            <div class="rules-item"><span class="rules-number">1.3</span><span>Сервис предоставляет рекомендации на основе законодательства РФ или РБ</span></div>
-        </div>
+        **1.2.** Пользователь может загрузить фото документа или вставить текст вручную
         
-        <div class="rules-section">
-            <div class="rules-title">2️⃣ Как пользоваться</div>
-            <div class="rules-item"><span class="rules-number">2.1</span><span>Выберите юрисдикцию (🇷 РФ или 🇧🇾 РБ) — это влияет на применяемые законы</span></div>
-            <div class="rules-item"><span class="rules-number">2.2</span><span>Перейдите во вкладку «📸 Фото» и загрузите изображение документа</span></div>
-            <div class="rules-item"><span class="rules-number">2.3</span><span>Дождитесь распознавания текста (10-30 секунд)</span></div>
-            <div class="rules-item"><span class="rules-number">2.4</span><span>Проверьте распознанный текст и при необходимости отредактируйте</span></div>
-            <div class="rules-item"><span class="rules-number">2.5</span><span>Нажмите «🚀 Анализировать» для получения результатов</span></div>
-        </div>
+        **1.3.** Сервис предоставляет рекомендации на основе законодательства РФ или РБ
+        """)
+    
+    with st.expander("2️⃣ Как пользоваться", expanded=True):
+        st.markdown("""
+        **2.1.** Выберите юрисдикцию (Россия или Беларусь) — это влияет на применяемые законы
         
-        <div class="rules-section">
-            <div class="rules-title">3️⃣ Требования к фото документа</div>
-            <div class="rules-item"><span class="rules-number">3.1</span><span>Фото должно быть чётким, без размытия</span></div>
-            <div class="rules-item"><span class="rules-number">3.2</span><span>Текст должен быть хорошо освещён, без теней и бликов</span></div>
-            <div class="rules-item"><span class="rules-number">3.3</span><span>Документ должен быть расположен ровно, без перекосов</span></div>
-            <div class="rules-item"><span class="rules-number">3.4</span><span>Поддерживаемые форматы: JPG, JPEG, PNG</span></div>
-            <div class="rules-item"><span class="rules-number">3.5</span><span>Максимальный размер файла: 5 MB</span></div>
-        </div>
+        **2.2.** Перейдите во вкладку «📸 Фото» и загрузите изображение документа
         
-        <div class="rules-section">
-            <div class="rules-title">4️⃣ Конфиденциальность</div>
-            <div class="rules-item"><span class="rules-number">4.1</span><span>Загруженные документы не сохраняются на сервере</span></div>
-            <div class="rules-item"><span class="rules-number">4.2</span><span>Данные удаляются после завершения сессии</span></div>
-            <div class="rules-item"><span class="rules-number">4.3</span><span>Сервис не передаёт данные третьим лицам</span></div>
-            <div class="rules-item"><span class="rules-number">4.4</span><span>Не загружайте документы с персональными данными (паспорт, ИНН и т.д.)</span></div>
-        </div>
+        **2.3.** Дождитесь распознавания текста (10-30 секунд)
         
-        <div class="rules-section">
-            <div class="rules-title">5️⃣ Ограничения и отказ от ответственности</div>
-            <div class="rules-item"><span class="rules-number">5.1</span><span>Сервис предоставляет рекомендации информационного характера</span></div>
-            <div class="rules-item"><span class="rules-number">5.2</span><span>Результаты анализа не являются юридической консультацией</span></div>
-            <div class="rules-item"><span class="rules-number">5.3</span><span>Для важных решений обращайтесь к профессиональным юристам</span></div>
-            <div class="rules-item"><span class="rules-number">5.4</span><span>Сервис не несёт ответственности за решения, принятые на основе анализа</span></div>
-        </div>
+        **2.4.** Проверьте распознанный текст и при необходимости отредактируйте
         
-        <div class="rules-warning">
-            <strong>⚠️ Важно:</strong> Сервис не заменяет очную консультацию юриста. Для сложных случаев и важных сделок обращайтесь к специалистам.
-        </div>
+        **2.5.** Нажмите «🚀 Анализировать» для получения результатов
+        """)
+    
+    with st.expander("3️⃣ Требования к фото документа", expanded=False):
+        st.markdown("""
+        **3.1.** Фото должно быть чётким, без размытия
         
-        <div class="rules-info">
-            <strong>ℹ️ Поддержка:</strong> При возникновении вопросов или технических проблем используйте кнопку «🔄 Обновить» для начала новой сессии.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.divider()
+        **3.2.** Текст должен быть хорошо освещён, без теней и бликов
+        
+        **3.3.** Документ должен быть расположен ровно, без перекосов
+        
+        **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
+        
+        **3.5.** Максимальный размер файла: 5 MB
+        """)
+    
+    with st.expander("4️⃣ Конфиденциальность", expanded=False):
+        st.markdown("""
+        **4.1.** Загруженные документы не сохраняются на сервере
+        
+        **4.2.** Данные удаляются после завершения сессии
+        
+        **4.3.** Сервис не передаёт данные третьим лицам
+        
+        **4.4.** Не загружайте документы с персональными данными (паспорт, ИНН и т.д.)
+        """)
+    
+    with st.expander("5️⃣ Ограничения и отказ от ответственности", expanded=False):
+        st.markdown("""
+        **5.1.** Сервис предоставляет рекомендации информационного характера
+        
+        **5.2.** Результаты анализа не являются юридической консультацией
+        
+        **5.3.** Для важных решений обращайтесь к профессиональным юристам
+        
+        **5.4.** Сервис не несёт ответственности за решения, принятые на основе анализа
+        """)
+    
+    st.warning("⚠️ **Важно:** Сервис не заменяет очную консультацию юриста. Для сложных случаев и важных сделок обращайтесь к специалистам.")
+    
+    st.info("ℹ️ **Поддержка:** При возникновении вопросов или технических проблем используйте кнопку «🔄 Обновить» для начала новой сессии.")
+    
+    st.divider()
 
 # ЮРИСДИКЦИЯ С ФЛАГАМИ
 st.markdown("**⚖️ Выберите юрисдикцию:**")
-jur = st.radio(
+
+# Используем selectbox вместо radio для лучшей совместимости с эмодзи
+jur_option = st.selectbox(
     "Законодательство:",
-    ["🇷🇺 РФ — Россия", "🇧 РБ — Беларусь"],
-    horizontal=True,
-    label_visibility="collapsed",
-    key="jur_radio"
+    options=["🇷🇺 Россия", "🇧🇾 Беларусь"],
+    index=0,
+    key="jur_select",
+    label_visibility="collapsed"
 )
-st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
+st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
+
 st.divider()
 
 # ВКЛАДКИ
@@ -505,7 +457,7 @@ st.divider()
 st.markdown("""
 <div style="text-align: center; color: #555; font-size: 0.75rem; padding: 20px;">
 ⚖️ <b>Context.Pro Legal</b><br>
- Конфиденциально • Без сохранения данных<br>
+Конфиденциально • Без сохранения данных<br>
 Не является публичной офертой
 </div>
 """, unsafe_allow_html=True)
