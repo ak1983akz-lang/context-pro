@@ -101,21 +101,18 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (БЕЗ ЛИМИТОВ ДЛЯ МОБИЛЬНЫХ)
+# 📸 OCR (АВТОКОМПРЕССИЯ ДЛЯ МОБИЛЬНЫХ)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
         
-        # Проверка размера для OCR
-        max_size = 5 * 1024 * 1024  # 5 MB
+        max_size = 5 * 1024 * 1024
         
         if len(file_bytes) > max_size:
-            # Если слишком большой файл — пытаемся его сжать
             img = Image.open(io.BytesIO(file_bytes))
             
-            # Конвертируем в RGB
             if img.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 if img.mode == 'P':
@@ -125,12 +122,10 @@ def extract_text_from_image(uploaded_file):
             elif img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Масштабируем если ширина > 1920
             scale = min(1.0, 1920 / max(img.width, img.height))
             if scale < 1.0:
                 img = img.resize((int(img.width*scale), int(img.height*scale)), Image.Resampling.LANCZOS)
             
-            # Сжимаем до JPEG 80% качества
             img_byte_arr = io.BytesIO()
             quality = 80
             while quality >= 20:
@@ -142,7 +137,6 @@ def extract_text_from_image(uploaded_file):
             
             file_bytes = img_byte_arr.getvalue()
         
-        # Отправляем в OCR
         processed_file = io.BytesIO(file_bytes)
         processed_file.name = uploaded_file.name
         processed_file.type = uploaded_file.type or 'image/jpeg'
@@ -241,7 +235,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🎨 CSS
+# 🎨 CSS (СКРЫВАЕМ КАМЕРУ НА МОБИЛЬНЫХ)
 # =============================================================================
 st.markdown("""
 <style>
@@ -250,9 +244,9 @@ st.markdown("""
 .stButton>button { 
     background: #1f77b4; color: white; font-weight: bold; border-radius: 8px; height: 50px; font-size: 16px; width: 100%;
 }
-.stFileUploader label { display: none; }
 [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
-.stFileUploaderDropzone { border: 2px dashed #333; padding: 20px; border-radius: 12px; margin-top: 10px; }
+[data-testid="stFileUploaderInput"] { display: none; }
+.stFileUploaderDropzone { border: 2px dashed #333; padding: 20px; border-radius: 12px; margin-top: 10px; cursor: pointer; }
 
 /* Карта рисков */
 .risk-cards {
@@ -311,7 +305,7 @@ if st.session_state.show_rules:
         
         **1.2.** Выберите тип договора для более точного анализа
         
-        **1.3.** Сфотографируйте документ камерой или загрузите из галереи
+        **1.3.** **Загрузите фото из галереи телефона** (не камера напрямую)
         
         **1.4.** Нажмите «Распознать» и дождитесь результата (10-30 секунд)
         
@@ -363,27 +357,27 @@ st.divider()
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО (УЛУЧШЕННАЯ ДЛЯ МОБИЛЬНЫХ) ===
+# === ВКЛАДКА 1: ФОТО (ОЧИЩЕННЫЙ ИНТЕРФЕЙС) ===
 with tab_photo:
     st.markdown("#### 📄 Загрузка фото документа")
     
+    st.markdown("💡 **Как загрузить фото:**\nОткройте **Галерею** → выберите фото → нажмите загрузить")
+    
     current_files = st.file_uploader(
-        "Выберите фото",
+        "Выберите фото из галереи",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True,
         key=f"up_{st.session_state.ocr_counter}",
         label_visibility="hidden",
-        help="Можно выбрать несколько фото"
+        help="Выбирайте фото из галереи телефона"
     )
     
     if current_files:
-        # Преобразуем в список для удобства работы
         if isinstance(current_files, list):
             files_to_process = current_files
         else:
             files_to_process = [current_files]
         
-        # Добавляем файлы если их ещё нет
         for f in files_to_process:
             if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
                 st.session_state.uploaded_files_list.append(f)
@@ -591,7 +585,7 @@ with tab_q:
     st.session_state.question_txt = q
     if st.button("Получить ответ", disabled=len(q)<5):
         st.markdown('<div class="loading-box">Обработка...</div>', unsafe_allow_html=True)
-        jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
+        jur_base = "РФ" if "РФ" в st.session_state.jurisdiction else "РБ"
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
             st.divider()
