@@ -101,11 +101,10 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (ОБНОВЛЁН ДЛЯ МОБИЛЬНЫХ)
+# 📸 OCR (Упрощённая для мобил)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
-        # Для мобильных устройств важно сбросить позицию файла перед чтением
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
         
@@ -210,7 +209,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🎨 CSS (СКРЫТ ЛИМИТ 200MB + МОБИЛЬНАЯ АДАПТАЦИЯ)
+# 🎨 CSS (СКРЫТ ЛИМИТ + МОБИЛЬНАЯ АДАПТАЦИЯ)
 # =============================================================================
 st.markdown("""
 <style>
@@ -226,7 +225,7 @@ h1 { font-size: 1.5rem !important; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
 .file-info { background: #262730; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #444; }
 
-/* СКРЫТЬ ЛИМИТ 200MB В ЗАГРУЗЧИКЕ ФАЙЛОВ */
+/* СКРЫТЬ ЛИМИТ 200MB */
 [data-testid="stFileUploader"] small {
     display: none !important;
 }
@@ -317,7 +316,7 @@ if st.session_state.show_rules:
         
         **3.3.** Документ должен быть расположен ровно, без перекосов
         
-        **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG, HEIC (iPhone), WEBP
+        **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
         
         **3.5.** Максимальный размер файла: 5 МБ
         """)
@@ -389,45 +388,39 @@ st.divider()
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО ===
+# === ВКЛАДКА 1: ФОТО (УПРОЩЁННАЯ ДЛЯ МОБИЛЬНЫХ) ===
 with tab_photo:
-    st.markdown("#### Загрузите фото документа")
+    st.markdown("#### 📄 Загрузка фото документа")
+    st.info("💡 Нажмите кнопку ниже → выберите фото из галереи → загрузите документ")
     
-    # Улучшенный загрузчик для мобильных устройств
+    # Упростим загрузчик для мобильных
     current_files = st.file_uploader(
-        "Выберите фото",
-        type=["jpg", "jpeg", "png", "heic", "heif", "webp"],  # Добавлены форматы для iPhone
-        accept_multiple_files=False,  # На мобильных лучше загружать по одному файлу
+        "Загрузить фото из галереи",
+        type=["jpg", "jpeg", "png"],  # Только основные форматы
+        accept_multiple_files=False,  # Один файл за раз (работает стабильнее на мобилках)
         key=f"up_{st.session_state.ocr_counter}",
         label_visibility="collapsed",
-        help="Загружайте фото с телефона: камера → галерея"
+        help="Выберите из галереи телефона"
     )
     
     if current_files:
-        # Если это список файлов (для десктопа) или один файл (для мобильных)
-        if isinstance(current_files, list):
-            files_to_process = current_files
-        else:
-            files_to_process = [current_files]
+        # Добавляем файл если его ещё нет
+        if not any(x.name == current_files.name and x.size == current_files.size for x in st.session_state.uploaded_files_list):
+            st.session_state.uploaded_files_list.append(current_files)
         
-        # Фильтрация дубликатов
-        for f in files_to_process:
-            if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
-                st.session_state.uploaded_files_list.append(f)
-        
-        st.success(f"Загружено файлов: {len(st.session_state.uploaded_files_list)}")
+        st.success(f"✅ Загружено файлов: {len(st.session_state.uploaded_files_list)}")
         
         for i, f in enumerate(st.session_state.uploaded_files_list):
             size_kb = round(f.size / 1024, 1)
-            st.markdown(f"<div class='file-info'>Стр. {i+1}: {f.name} ({size_kb} КБ)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='file-info'>📄 Стр. {i+1}: {f.name} ({size_kb} КБ)</div>", unsafe_allow_html=True)
         
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("Очистить", key="clear_q"):
+            if st.button("Очистить всё", key="clear_q"):
                 st.session_state.uploaded_files_list = []
                 st.rerun()
         with c2:
-            if st.button("Распознать", type="primary", key="btn_ocr_go"):
+            if st.button("🔍 Распознать текст", type="primary", key="btn_ocr_go"):
                 progress_bar = st.progress(0)
                 status = st.empty()
                 all_text = ""
@@ -438,7 +431,7 @@ with tab_photo:
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
                     
-                    # ✅ ВАЖНО: Всегда сбрасываем позицию файла перед чтением
+                    # ВАЖНО: сбрасываем позицию перед чтением
                     file.seek(0)
                     
                     text, error = extract_text_from_image(file)
@@ -458,7 +451,7 @@ with tab_photo:
                     st.session_state.contract_txt = corrected
                     st.session_state.ocr_complete = True
                     st.session_state.ocr_counter += 1
-                    st.success(f"Готово! ({len(corrected)} символов)")
+                    st.success(f"✅ Готово! ({len(corrected)} символов)")
                     st.rerun()
                 
                 status.empty()
@@ -467,7 +460,7 @@ with tab_photo:
     st.divider()
     
     if st.session_state.ocr_complete and st.session_state.contract_txt:
-        st.markdown("### Текст документа")
+        st.markdown("### 📝 Текст документа")
         
         txt = st.text_area(
             "Текст:", 
@@ -500,13 +493,13 @@ with tab_photo:
             else:
                 st.session_state.result = res
                 st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-                st.success("Готово!")
+                st.success("✅ Готово!")
                 st.rerun()
         
         # КАРТА РИСКОВ
         if st.session_state.result and st.session_state.risk_summary:
             st.divider()
-            st.markdown("### Карта рисков")
+            st.markdown("### 📊 Карта рисков")
             
             summary = st.session_state.risk_summary
             
@@ -532,14 +525,14 @@ with tab_photo:
             """, unsafe_allow_html=True)
             
             st.divider()
-            st.markdown("### Полный анализ")
+            st.markdown("### 📄 Полный анализ")
             st.markdown(st.session_state.result)
-            st.download_button("Скачать отчёт", st.session_state.result, "report.txt")
+            st.download_button("📥 Скачать отчёт", st.session_state.result, "report.txt")
     
     elif st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
             st.divider()
-            st.markdown("### Карта рисков")
+            st.markdown("### 📊 Карта рисков")
             summary = st.session_state.risk_summary
             st.markdown(f"""
             <div class="risk-cards">
@@ -566,7 +559,7 @@ with tab_photo:
 
 # === ВКЛАДКА 2: РУЧНОЙ ВВОД ===
 with tab_manual:
-    st.markdown("#### Вставьте текст")
+    st.markdown("#### ✍️ Вставьте текст")
     txt = st.text_area("Текст:", value=st.session_state.contract_txt, height=400, key="man_area", label_visibility="collapsed")
     st.session_state.contract_txt = txt
     if st.button("Анализ", disabled=len(txt)<50):
@@ -587,7 +580,7 @@ with tab_manual:
     if st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
             st.divider()
-            st.markdown("### Карта рисков")
+            st.markdown("### 📊 Карта рисков")
             summary = st.session_state.risk_summary
             st.markdown(f"""
             <div class="risk-cards">
@@ -614,7 +607,7 @@ with tab_manual:
 
 # === ВКЛАДКА 3: ВОПРОС ===
 with tab_q:
-    st.markdown("#### Юридический вопрос")
+    st.markdown("#### 💬 Юридический вопрос")
     q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=200, key="q_ar", label_visibility="collapsed")
     st.session_state.question_txt = q
     if st.button("Получить ответ", disabled=len(q)<5):
@@ -623,7 +616,7 @@ with tab_q:
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
             st.divider()
-            st.markdown("### Ответ")
+            st.markdown("### 💡 Ответ")
             st.markdown(res)
 
 # FOOTER
