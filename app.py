@@ -235,7 +235,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🎨 CSS (СКРЫВАЕМ КАМЕРУ НА МОБИЛЬНЫХ)
+# 🎨 CSS
 # =============================================================================
 st.markdown("""
 <style>
@@ -585,7 +585,7 @@ with tab_q:
     st.session_state.question_txt = q
     if st.button("Получить ответ", disabled=len(q)<5):
         st.markdown('<div class="loading-box">Обработка...</div>', unsafe_allow_html=True)
-        jur_base = "РФ" if "РФ" в st.session_state.jurisdiction else "РБ"
+        jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
             st.divider()
