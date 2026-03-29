@@ -54,10 +54,6 @@ if 'page_texts' not in st.session_state:
 if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
 
-# Максимальный размер файла (1024 КБ для Streamlit Cloud)
-MAX_FILE_SIZE_KB = 800
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_KB * 1024
-
 # =============================================================================
 # 🔤 КОРРЕКЦИЯ ТЕКСТА
 # =============================================================================
@@ -73,7 +69,7 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
     
     try:
-        jur_base = "Российская Федерация" if "РФ" in jurisdiction else "Республика Беларусь"
+        jur_base = "Российская Федерация" if "РФ" в jurisdiction else "Республика Беларусь"
         
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -105,95 +101,20 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 🖼️ КОМПРЕССИЯ ИЗОБРАЖЕНИЯ (Обязательна для мобильных)
-# =============================================================================
-def compress_image_for_upload(file_bytes):
-    """Сжимает изображение до нужного размера"""
-    try:
-        img = Image.open(io.BytesIO(file_bytes))
-        
-        # Конвертируем в RGB (нужно для JPEG)
-        if img.mode in ('RGBA', 'LA', 'P'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        quality = 85
-        img_byte_arr = io.BytesIO()
-        
-        while quality >= 10:
-            # Масштабируем если слишком большой
-            width, height = img.size
-            
-            # Если ширина > 1920px, уменьшаем
-            scale_factor = min(1.0, 1920 / max(width, height))
-            new_width = int(width * scale_factor)
-            new_height = int(height * scale_factor)
-            
-            if scale_factor < 1.0:
-                img_scaled = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            else:
-                img_scaled = img
-            
-            img_scaled.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
-            
-            if len(img_byte_arr.getvalue()) <= MAX_FILE_SIZE_BYTES:
-                break
-            
-            quality -= 15
-            img_byte_arr.seek(0)
-        
-        img_byte_arr.seek(0)
-        compressed_bytes = img_byte_arr.read()
-        
-        if len(compressed_bytes) > MAX_FILE_SIZE_BYTES:
-            return None, f"Файл слишком большой даже после сжатия (макс. {MAX_FILE_SIZE_KB} КБ)"
-        
-        return compressed_bytes, None
-        
-    except Exception as e:
-        return None, f"Ошибка обработки фото: {str(e)}"
-
-# =============================================================================
-# 📸 OCR (С проверкой размера)
+# 📸 OCR
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
         
-        original_size_kb = round(len(file_bytes) / 1024, 1)
-        
-        # Проверка размера оригинала
-        if len(file_bytes) > MAX_FILE_SIZE_BYTES:
-            # Пробуем сжать
-            st.info(f"⚠️ Фото размером {original_size_kb} КБ. Выполняется автоматическое сжатие...")
-            
-            compressed_bytes, error = compress_image_for_upload(file_bytes)
-            
-            if error:
-                return None, f"Не удалось загрузить фото: {error}"
-            
-            file_bytes = compressed_bytes
-            st.success("✅ Фото успешно сжато!")
-        
-        uploaded_file.close()
-        processed_file = io.BytesIO(file_bytes)
-        processed_file.name = uploaded_file.name
-        processed_file.type = uploaded_file.type
-        
-        # Проверка финального размера перед отправкой в OCR
-        final_size_kb = round(len(processed_file.getvalue()) / 1024, 1)
-        if final_size_kb > MAX_FILE_SIZE_KB + 100:  # Допустим небольшой запас
-            return None, f"Фото всё равно слишком большое: {final_size_kb} КБ (максимум {MAX_FILE_SIZE_KB} КБ)"
+        # Проверка размера (максимум 5 МБ для OCR API)
+        if len(file_bytes) > 5 * 1024 * 1024:
+            return None, f"Файл слишком большой ({round(len(file_bytes)/1024/1024, 1)} МБ)"
         
         response = requests.post(
             'https://api.ocr.space/parse/image',
-            files={'file': (processed_file.name, processed_file, processed_file.type or 'image/jpeg')},
+            files={'file': (uploaded_file.name, file_bytes, uploaded_file.type or 'image/jpeg')},
             data={
                 'apikey': 'helloworld',
                 'language': 'rus',
@@ -363,8 +284,6 @@ if st.session_state.show_rules:
         **3.3.** Документ должен быть расположен ровно, без перекосов
         
         **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
-        
-        **3.5.** ⚠️ **Важно:** Размер фото не более **800 КБ** (автоматическое сжатие включено)
         """)
     
     with st.expander("4. Конфиденциальность", expanded=False):
@@ -407,7 +326,7 @@ with col_jur:
         key="jur_select",
         label_visibility="collapsed"
     )
-    st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
+    st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" в jur_option else "🇧🇾 РБ"
 
 with col_type:
     st.markdown("**Тип договора:**")
@@ -434,39 +353,26 @@ st.divider()
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО (С АВТОМАТИЧЕСКИМ СЖАТИЕМ) ===
+# === ВКЛАДКА 1: ФОТО ===
 with tab_photo:
-    st.markdown("#### 📄 Загрузка фото документа")
-    
-    st.markdown(f"""
-    <div class="hint-warning">
-    <strong>⚠️ Лимит загрузок:</strong><br>
-    Из-за ограничений облачного хостинга, максимальный размер фото составляет **{MAX_FILE_SIZE_KB} КБ**.<br>
-    Фото большего размера будут автоматически сжаты перед загрузкой.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("#### Загрузка фото документа")
     
     current_files = st.file_uploader(
-        "Загрузить фото из галереи",
+        "Выберите фото",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=False,
         key=f"up_{st.session_state.ocr_counter}",
-        label_visibility="collapsed",
-        help="Максимум {MAX_FILE_SIZE_KB} КБ"
+        label_visibility="collapsed"
     )
     
     if current_files:
         file_info = current_files
-        original_size_kb = round(file_info.size / 1024, 1)
-        
-        if file_info.size > MAX_FILE_SIZE_BYTES:
-            st.warning(f"⚠️ Фото больше {MAX_FILE_SIZE_KB} КБ (размер: {original_size_kb} КБ). Будет выполнено автоматическое сжатие.")
         
         # Добавляем файл если его ещё нет
         if not any(x.name == file_info.name and x.size == file_info.size for x in st.session_state.uploaded_files_list):
             st.session_state.uploaded_files_list.append(file_info)
         
-        st.success(f"✅ Загружено файлов: {len(st.session_state.uploaded_files_list)}")
+        st.success(f"Загружено файлов: {len(st.session_state.uploaded_files_list)}")
         
         for i, f in enumerate(st.session_state.uploaded_files_list):
             size_kb = round(f.size / 1024, 1)
@@ -478,7 +384,7 @@ with tab_photo:
                 st.session_state.uploaded_files_list = []
                 st.rerun()
         with c2:
-            if st.button("🔍 Распознать текст", type="primary", key="btn_ocr_go"):
+            if st.button("🔍 Распознать", type="primary", key="btn_ocr_go"):
                 progress_bar = st.progress(0)
                 status = st.empty()
                 all_text = ""
@@ -508,7 +414,7 @@ with tab_photo:
                     st.session_state.contract_txt = corrected
                     st.session_state.ocr_complete = True
                     st.session_state.ocr_counter += 1
-                    st.success(f"✅ Готово! ({len(corrected)} символов)")
+                    st.success(f"Готово! ({len(corrected)} символов)")
                     st.rerun()
                 
                 status.empty()
@@ -517,7 +423,7 @@ with tab_photo:
     st.divider()
     
     if st.session_state.ocr_complete and st.session_state.contract_txt:
-        st.markdown("### 📝 Текст документа")
+        st.markdown("### Текст документа")
         
         txt = st.text_area(
             "Текст:", 
@@ -550,13 +456,13 @@ with tab_photo:
             else:
                 st.session_state.result = res
                 st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-                st.success("✅ Готово!")
+                st.success("Готово!")
                 st.rerun()
         
         # КАРТА РИСКОВ
         if st.session_state.result and st.session_state.risk_summary:
             st.divider()
-            st.markdown("### 📊 Карта рисков")
+            st.markdown("### Карта рисков")
             
             summary = st.session_state.risk_summary
             
@@ -582,14 +488,14 @@ with tab_photo:
             """, unsafe_allow_html=True)
             
             st.divider()
-            st.markdown("### 📄 Полный анализ")
+            st.markdown("### Полный анализ")
             st.markdown(st.session_state.result)
-            st.download_button("📥 Скачать отчёт", st.session_state.result, "report.txt")
+            st.download_button("Скачать отчёт", st.session_state.result, "report.txt")
     
     elif st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
             st.divider()
-            st.markdown("### 📊 Карта рисков")
+            st.markdown("### Карта рисков")
             summary = st.session_state.risk_summary
             st.markdown(f"""
             <div class="risk-cards">
@@ -616,7 +522,7 @@ with tab_photo:
 
 # === ВКЛАДКА 2: РУЧНОЙ ВВОД ===
 with tab_manual:
-    st.markdown("#### ✍️ Вставьте текст")
+    st.markdown("#### Вставьте текст")
     txt = st.text_area("Текст:", value=st.session_state.contract_txt, height=400, key="man_area", label_visibility="collapsed")
     st.session_state.contract_txt = txt
     if st.button("Анализ", disabled=len(txt)<50):
@@ -637,7 +543,7 @@ with tab_manual:
     if st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
             st.divider()
-            st.markdown("### 📊 Карта рисков")
+            st.markdown("### Карта рисков")
             summary = st.session_state.risk_summary
             st.markdown(f"""
             <div class="risk-cards">
@@ -664,7 +570,7 @@ with tab_manual:
 
 # === ВКЛАДКА 3: ВОПРОС ===
 with tab_q:
-    st.markdown("#### 💬 Юридический вопрос")
+    st.markdown("#### Юридический вопрос")
     q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=200, key="q_ar", label_visibility="collapsed")
     st.session_state.question_txt = q
     if st.button("Получить ответ", disabled=len(q)<5):
@@ -673,7 +579,7 @@ with tab_q:
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
             st.divider()
-            st.markdown("### 💡 Ответ")
+            st.markdown("### Ответ")
             st.markdown(res)
 
 # FOOTER
