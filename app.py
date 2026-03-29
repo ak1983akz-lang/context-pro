@@ -63,7 +63,7 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
             json={
                 "model": "deepseek/deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки распознавания в тексте, не меняя смысл. Верни только исправленный текст."},
+                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки распознавания в тексте, не меняя смысл."},
                     {"role": "user", "content": f"Исправь ошибки в тексте:\n\n{raw_text}"}
                 ],
                 "temperature": 0.1,
@@ -83,15 +83,23 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR
+# 📸 OCR (УЛУЧШЕННАЯ ДЛЯ МОБИЛЬНЫХ)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
+        # Сброс позиции файла критически важен для мобильных
         uploaded_file.seek(0)
+        
+        # Читаем байты напрямую из буфера
         file_bytes = uploaded_file.read()
+        
+        # Проверка на пустой файл (частая проблема мобильных браузеров)
+        if not file_bytes or len(file_bytes) == 0:
+            return None, "Файл пустой. Попробуйте выбрать файл заново"
         
         max_size = 5 * 1024 * 1024
         
+        # Автоматическая компрессия если файл большой
         if len(file_bytes) > max_size:
             img = Image.open(io.BytesIO(file_bytes))
             
@@ -119,9 +127,10 @@ def extract_text_from_image(uploaded_file):
             
             file_bytes = img_byte_arr.getvalue()
         
+        # Создание временного файла для API
         processed_file = io.BytesIO(file_bytes)
-        processed_file.name = uploaded_file.name
-        processed_file.type = uploaded_file.type or 'image/jpeg'
+        processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
+        processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
         
         response = requests.post(
             'https://api.ocr.space/parse/image',
@@ -142,11 +151,14 @@ def extract_text_from_image(uploaded_file):
                 text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
                 if text and text.strip():
                     return text.strip(), None
+            else:
+                err = data.get('ErrorMessage', ['Unknown error'])
+                return None, err[0] if isinstance(err, list) else err
         
-        return None, "Ошибка распознавания"
+        return None, f"Ошибка API: {response.status_code}"
         
     except Exception as e:
-        return None, "Ошибка обработки фото"
+        return None, f"Ошибка обработки: {str(e)}"
 
 # =============================================================================
 # 🔄 СБРОС
@@ -280,15 +292,15 @@ if st.session_state.show_rules:
     
     with st.expander("1. Как пользоваться", expanded=True):
         st.markdown("""
-        **1.1.** Выберите юрисдикцию (Россия или Беларусь) — это влияет на применяемые законы
+        **1.1.** Выберите юрисдикцию (Россия или Беларусь)
         
-        **1.2.** Выберите тип договора для более точного анализа
+        **1.2.** Выберите тип договора
         
         **1.3.** Загрузите фото из галереи телефона
         
-        **1.4.** Нажмите «Распознать» и дождитесь результата (10-30 секунд)
+        **1.4.** Нажмите «Распознать» (ждите 10-30 сек)
         
-        **1.5.** Проверьте распознанный текст и нажмите «Анализировать»
+        **1.5.** Проверьте текст и нажмите «Анализировать»
         """)
     
     st.warning("**Важно:** Сервис не заменяет консультацию юриста.")
@@ -337,7 +349,7 @@ tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"
 # === ФОТО ===
 with tab_photo:
     st.markdown("#### Загрузка фото документа")
-    st.markdown("💡 Откройте Галерею → выберите фото → загрузите")
+    st.markdown("💡 **Мобильные пользователи:** Откройте Галерею → выберите фото → нажмите загрузить")
     
     current_files = st.file_uploader(
         "Выберите фото",
@@ -348,11 +360,13 @@ with tab_photo:
     )
     
     if current_files:
+        # Обработка списков и одиночных файлов
         if isinstance(current_files, list):
             files_to_process = current_files
         else:
             files_to_process = [current_files]
         
+        # Добавляем файлы без дублей
         for f in files_to_process:
             if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
                 st.session_state.uploaded_files_list.append(f)
@@ -373,6 +387,7 @@ with tab_photo:
                 progress_bar = st.progress(0)
                 status = st.empty()
                 all_text = ""
+                errors = []
                 
                 st.markdown('<div class="loading-box">Распознавание текста...</div>', unsafe_allow_html=True)
                 
@@ -380,6 +395,13 @@ with tab_photo:
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
                     
+                    # Попытка 1: прямой доступ к файлу
+                    file.seek(0)
+                    
+                    # Показываем диагностическую информацию
+                    file_info = f"Файл: {getattr(file, 'name', 'unknown')} | Размер: {len(file.read())} байт | Тип: {getattr(file, 'type', 'unknown')}"
+                    
+                    # Повторный сброс после проверки
                     file.seek(0)
                     
                     text, error = extract_text_from_image(file)
@@ -390,7 +412,7 @@ with tab_photo:
                         st.session_state.page_texts[idx] = text
                         progress_bar.progress(int((idx+1)/total * 100))
                     else:
-                        st.warning(f"Стр. {idx+1}: ошибка")
+                        errors.append(f"Стр. {idx+1}: {error}")
                 
                 if all_text.strip():
                     status.text("Обработка текста...")
@@ -399,12 +421,31 @@ with tab_photo:
                     st.session_state.contract_txt = corrected
                     st.session_state.ocr_complete = True
                     st.session_state.ocr_counter += 1
+                    
+                    if errors:
+                        st.error(f"Некоторые страницы не распознаны: {len(errors)} ошибок")
+                    
                     st.success(f"Готово! ({len(corrected)} символов)")
                     st.rerun()
-                
-                status.empty()
-                progress_bar.empty()
-    
+                else:
+                    status.empty()
+                    progress_bar.empty()
+                    
+                    if errors:
+                        st.error(f"Все страницы ошиблись:\n{' '.join(errors)}")
+                    else:
+                        st.error("Текст не распознан ни на одной странице")
+                    
+                    # Показываем подробную инструкцию
+                    st.warning("""
+                    **Проблема с телефоном:**
+                    
+                    1. Убедитесь, что фото четкое и хорошо освещено
+                    2. Файл может быть слишком большим
+                    3. Попробуйте сделать скриншот документа вместо фото
+                    4. Выберите меньшее количество страниц одновременно
+                    """)
+
     st.divider()
     
     if st.session_state.ocr_complete and st.session_state.contract_txt:
