@@ -45,6 +45,8 @@ if 'ocr_complete' not in st.session_state:
     st.session_state.ocr_complete = False
 if 'show_rules' not in st.session_state:
     st.session_state.show_rules = False
+if 'show_history' not in st.session_state:
+    st.session_state.show_history = False
 if 'question_txt' not in st.session_state:
     st.session_state.question_txt = ""
 if 'uploaded_files_list' not in st.session_state:
@@ -55,6 +57,8 @@ if 'session_history' not in st.session_state:
     st.session_state.session_history = []
 if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
+if 'full_history_results' not in st.session_state:
+    st.session_state.full_history_results = {}
 
 # =============================================================================
 # 🔤 КОРРЕКЦИЯ ТЕКСТА
@@ -150,6 +154,7 @@ def reset_session():
     st.session_state.ocr_counter = 0
     st.session_state.ocr_complete = False
     st.session_state.show_rules = False
+    st.session_state.show_history = False
     st.session_state.uploaded_files_list = []
     st.session_state.page_texts = {}
 
@@ -195,10 +200,9 @@ def query_ai(system_prompt: str, user_text: str):
         return None, str(e)
 
 # =============================================================================
-# 📊 ИЗВЛЕЧЕНИЕ КРАТКИХ ИТОГОВ (для карты рисков)
+# 📊 ИЗВЛЕЧЕНИЕ КРАТКИХ ИТОГОВ
 # =============================================================================
 def extract_risk_summary(full_result: str, contract_type: str) -> dict:
-    """Извлекает краткие итоги из полного анализа для визуальной карты"""
     api_key = get_api_key()
     if not api_key:
         return None
@@ -214,7 +218,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
             json={
                 "model": "deepseek/deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": "Ты — ассистент. Извлеки из текста только цифры и вердикт. Верни JSON: {critical: число, medium: число, low: число, verdict: 'текст'}"},
+                    {"role": "system", "content": "Извлеки из текста только цифры и вердикт. Верни JSON: {critical: число, medium: число, low: число, verdict: 'текст'}"},
                     {"role": "user", "content": f"Извлеки итоги из анализа:\n\n{full_result}"}
                 ],
                 "temperature": 0.1,
@@ -225,7 +229,6 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
         
         if response.status_code == 200:
             data = response.json()
-            # Парсим упрощённо
             text = data["choices"][0]["message"]["content"]
             return {
                 "critical": text.count("🔴"),
@@ -236,7 +239,6 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     except:
         pass
     
-    # Если не получилось — считаем эмодзи в тексте
     return {
         "critical": full_result.count("🔴"),
         "medium": full_result.count("🟡"),
@@ -247,16 +249,17 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
 # =============================================================================
 # 💾 ДОБАВИТЬ В ИСТОРИЮ
 # =============================================================================
-def add_to_history(mode: str, preview: str, timestamp: str):
-    """Добавляет запись в историю сессии"""
+def add_to_history(mode: str, preview: str, timestamp: str, full_result: str = ""):
     record = {
+        "id": len(st.session_state.session_history),
         "mode": mode,
         "preview": preview[:50] + "..." if len(preview) > 50 else preview,
         "timestamp": timestamp,
-        "type": st.session_state.contract_type if mode == "Договор" else "Вопрос"
+        "type": st.session_state.contract_type if mode == "Договор" else "Вопрос",
+        "full_text": preview,
+        "result": full_result
     }
     st.session_state.session_history.insert(0, record)
-    # Храним только последние 10 записей
     if len(st.session_state.session_history) > 10:
         st.session_state.session_history = st.session_state.session_history[:10]
 
@@ -272,6 +275,7 @@ st.markdown("""
 }
 .stButton#btn_new_session { background: #dc2626 !important; }
 .stButton#btn_rules { background: #2563eb !important; }
+.stButton#btn_history { background: #7c3aed !important; }
 h1 { font-size: 1.5rem !important; }
 .loading-box { background: #1a233a; border: 2px dashed #D4AF37; color: #D4AF37; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
@@ -298,22 +302,67 @@ h1 { font-size: 1.5rem !important; }
 .risk-number { font-size: 2.5rem; font-weight: bold; display: block; }
 .risk-label { font-size: 0.9rem; opacity: 0.8; }
 
-/* История */
-.history-item {
-    background: #1e2329;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 8px 0;
-    border-left: 3px solid #1f77b4;
-    cursor: pointer;
+/* История - кликабельные карточки */
+.history-container {
+    margin: 15px 0;
 }
-.history-item:hover { background: #262730; }
-.history-time { font-size: 0.75rem; opacity: 0.6; }
+.history-card {
+    background: #1e2329;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
+    border-left: 4px solid #7c3aed;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.history-card:hover {
+    background: #262730;
+    transform: translateX(5px);
+}
+.history-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.history-card-icon {
+    font-size: 1.5rem;
+    margin-right: 10px;
+}
+.history-card-title {
+    font-weight: bold;
+    font-size: 1rem;
+    flex-grow: 1;
+}
+.history-card-time {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    background: #0f1419;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.history-card-preview {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    line-height: 1.4;
+}
+.history-card-type {
+    display: inline-block;
+    background: #1f77b4;
+    color: white;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+}
 
+/* Мобильная адаптация */
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
     .risk-cards { grid-template-columns: 1fr 1fr; }
+    .history-card { padding: 12px; }
+    .history-card-header { flex-direction: column; align-items: flex-start; gap: 5px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -323,7 +372,7 @@ h1 { font-size: 1.5rem !important; }
 # =============================================================================
 
 # ШАПКА
-col_h1, col_h2, col_h3 = st.columns([2, 1, 1])
+col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro")
     st.caption("Анализ договоров")
@@ -331,6 +380,9 @@ with col_h2:
     if st.button("📋 Правила", use_container_width=True, key="btn_rules"):
         st.session_state.show_rules = not st.session_state.show_rules
 with col_h3:
+    if st.button("📜 История", use_container_width=True, key="btn_history"):
+        st.session_state.show_history = not st.session_state.show_history
+with col_h4:
     if st.button("🔄 Обновить", use_container_width=True, key="btn_reset"):
         reset_session()
         st.success("✅ Сессия обновлена")
@@ -405,6 +457,49 @@ if st.session_state.show_rules:
     
     st.divider()
 
+# ИСТОРИЯ СЕССИИ (вместо боковой панели - теперь в основном контенте)
+if st.session_state.show_history:
+    st.markdown("### 🕒 История сессии")
+    
+    if st.session_state.session_history:
+        for idx, item in enumerate(st.session_state.session_history):
+            icon = "📄" if item["mode"] == "Договор" else "💬"
+            
+            # КЛИКАБЕЛЬНАЯ КАРТОЧКА
+            st.markdown(f"""
+            <div class="history-card" onclick="document.getElementById('history_{idx}').click()">
+                <div class="history-card-header">
+                    <div style="display: flex; align-items: center;">
+                        <span class="history-card-icon">{icon}</span>
+                        <span class="history-card-title">{item["type"]}</span>
+                    </div>
+                    <span class="history-card-time">{item["timestamp"]}</span>
+                </div>
+                <div class="history-card-preview">{item["preview"]}</div>
+                <span class="history-card-type">{item["mode"]}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Кнопка для восстановления (скрытая, но рабочая)
+            if st.button(f"📖 Открыть запись #{idx+1}", key=f"history_{idx}", 
+                        use_container_width=True, type="secondary"):
+                st.session_state.contract_txt = item.get("full_text", "")
+                st.session_state.result = item.get("result", "")
+                st.session_state.last_mode = "contract" if item["mode"] == "Договор" else "question"
+                st.session_state.contract_type = item.get("type", "Другое")
+                st.session_state.show_history = False
+                st.success(f"✅ Запись #{idx+1} восстановлена!")
+                st.rerun()
+    else:
+        st.info("📭 История пуста\n\nЗдесь появятся ваши последние анализы")
+    
+    if st.button("🗑️ Очистить историю", use_container_width=True, type="secondary"):
+        st.session_state.session_history = []
+        st.success("✅ История очищена")
+        st.rerun()
+    
+    st.divider()
+
 # НАСТРОЙКИ: ЮРИСДИКЦИЯ + ТИП ДОГОВОРА
 col_jur, col_type = st.columns(2)
 
@@ -440,32 +535,6 @@ with col_type:
     st.session_state.contract_type = contract_type
 
 st.divider()
-
-# БОКОВАЯ ПАНЕЛЬ: ИСТОРИЯ СЕССИИ
-with st.sidebar:
-    st.markdown("### 🕒 История сессии")
-    
-    if st.session_state.session_history:
-        for idx, item in enumerate(st.session_state.session_history):
-            icon = "📄" if item["mode"] == "Договор" else "💬"
-            st.markdown(f"""
-            <div class="history-item">
-                <div>{icon} <b>{item["type"]}</b></div>
-                <div style="font-size: 0.85rem; opacity: 0.8;">{item["preview"]}</div>
-                <div class="history-time">{item["timestamp"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("История пуста\n\nЗдесь появятся ваши последние анализы")
-    
-    st.divider()
-    
-    if st.button("🗑️ Очистить историю", use_container_width=True):
-        st.session_state.session_history = []
-        st.rerun()
-    
-    st.divider()
-    st.caption(f"⚖️ Context.Pro Legal\nВерсия 4.0")
 
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["📸 Фото", "✍️ Текст", "💬 Вопрос"])
@@ -568,14 +637,12 @@ with tab_photo:
             if err: st.error(err)
             else:
                 st.session_state.result = res
-                # Извлекаем краткие итоги для карты рисков
                 st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-                # Добавляем в историю
-                add_to_history("Договор", txt, datetime.now().strftime("%H:%M"))
+                add_to_history("Договор", txt, datetime.now().strftime("%H:%M"), res)
                 st.success("✅ Готово!")
                 st.rerun()
         
-        # 📊 КАРТА РИСКОВ (если анализ завершён)
+        # 📊 КАРТА РИСКОВ
         if st.session_state.result and st.session_state.risk_summary:
             st.divider()
             st.markdown("### 📊 Карта рисков")
@@ -609,7 +676,6 @@ with tab_photo:
             st.download_button("📥 Скачать отчёт", st.session_state.result, "report.txt")
     
     elif st.session_state.result and st.session_state.last_mode == "contract":
-        # Показываем результат если он есть но OCR не завершён (ручной ввод)
         if st.session_state.risk_summary:
             st.divider()
             st.markdown("### 📊 Карта рисков")
@@ -656,7 +722,7 @@ with tab_manual:
         if not err:
             st.session_state.result = res
             st.session_state.risk_summary = extract_risk_summary(res, st.session_state.contract_type)
-            add_to_history("Договор", txt, datetime.now().strftime("%H:%M"))
+            add_to_history("Договор", txt, datetime.now().strftime("%H:%M"), res)
             st.rerun()
     if st.session_state.result and st.session_state.last_mode == "contract":
         if st.session_state.risk_summary:
@@ -696,7 +762,7 @@ with tab_q:
         jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
         res, err = query_ai(f"Юрист ({jur_base}). Дай ответ со статьями законов.", q)
         if not err:
-            add_to_history("Вопрос", q, datetime.now().strftime("%H:%M"))
+            add_to_history("Вопрос", q, datetime.now().strftime("%H:%M"), res)
             st.divider()
             st.markdown("### 💡 Ответ")
             st.markdown(res)
