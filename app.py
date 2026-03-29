@@ -14,7 +14,7 @@ if 'contract_txt' not in st.session_state:
 if 'result' not in st.session_state:
     st.session_state.result = ""
 if 'jurisdiction' not in st.session_state:
-    st.session_state.jurisdiction = "🇷🇺 РФ"
+    st.session_state.jurisdiction = "🇷 🇺 РФ"
 if 'contract_type' not in st.session_state:
     st.session_state.contract_type = "Другое"
 if 'is_analyzing' not in st.session_state:
@@ -63,8 +63,8 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
             json={
                 "model": "deepseek/deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки распознавания в тексте."},
-                    {"role": "user", "content": f"Исправь ошибки в тексте:\n\n{raw_text}"}
+                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки."},
+                    {"role": "user", "content": f"Исправь текст:\n\n{raw_text}"}
                 ],
                 "temperature": 0.1,
                 "max_tokens": 3000
@@ -83,29 +83,11 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (УЛУЧШЕННОЕ ОБРАБОТКА С АЛЬТЕРНАТИВАМИ)
+# 📸 OCR (МАКСИАЛЬНАЯ КОМПРЕССИЯ ДО 500 КБ)
 # =============================================================================
-def extract_text_from_image(uploaded_file):
+def optimize_image_for_upload(original_bytes):
+    """Сжимает изображение до 500 КБ максимум"""
     try:
-        # Пробуем разные методы чтения файла
-        file_methods_success = False
-        
-        # Метод 1: прямой read
-        try:
-            uploaded_file.seek(0)
-            original_bytes = uploaded_file.read()
-            file_methods_success = True
-        except Exception:
-            uploaded_file.seek(0)
-            original_bytes = uploaded_file.read()
-            file_methods_success = True
-        
-        if not original_bytes or len(original_bytes) == 0:
-            return None, "Файл пустой или не был загружен"
-        
-        max_size = 8 * 1024 * 1024
-        
-        # Обработка изображения
         img = Image.open(io.BytesIO(original_bytes))
         
         # Конвертация в RGB
@@ -118,35 +100,67 @@ def extract_text_from_image(uploaded_file):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Масштабирование для лучшего качества OCR
+        # Масштабирование
         width, height = img.size
-        if width > 1920 or height > 1920:
-            scale = min(1.0, 1920 / max(width, height))
-            img = img.resize((int(width*scale), int(height*scale)), Image.Resampling.LANCZOS)
         
-        # Улучшение резкости и контраста
-        img = img.filter(ImageFilter.SHARPEN)
-        enhancer = ImageEnhance.Sharpness(img)
-        img = enhancer.enhance(1.5)
-        enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.3)
+        # Если фото очень большое, масштабируем
+        if width > 1600 or height > 1600:
+            scale = min(1.0, 1600 / max(width, height))
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            width, height = new_width, new_height
         
-        # Сохранение в JPEG
+        # Начинаем с высокого качества, постепенно снижаем до достижения 500 КБ
+        quality = 80
         img_byte_arr = io.BytesIO()
-        quality = 85
-        img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
-        img_byte_arr.seek(0)
-        processed_bytes = img_byte_arr.getvalue()
         
-        if len(processed_bytes) > max_size:
-            return None, "Файл слишком большой (макс. 8 МБ)"
+        target_size = 500 * 1024  # 500 КБ
         
-        # Отправка в OCR с несколькими попытками
-        for attempt in range(3):
-            processed_file = io.BytesIO(processed_bytes)
-            processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
-            processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
+        while quality >= 10:
+            img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
+            size_kb = len(img_byte_arr.getvalue()) / 1024
             
+            if size_kb <= target_size:
+                break
+                
+            quality -= 5
+            img_byte_arr.seek(0)
+        
+        img_byte_arr.seek(0)
+        return img_byte_arr.getvalue(), True
+        
+    except Exception as e:
+        return original_bytes, False
+
+# =============================================================================
+# 📸 OCR С ОПТИМИЗАЦИЕЙ
+# =============================================================================
+def extract_text_from_image(uploaded_file):
+    try:
+        uploaded_file.seek(0)
+        original_bytes = uploaded_file.read()
+        
+        if not original_bytes or len(original_bytes) == 0:
+            return None, "Файл пустой"
+        
+        # Максимально агрессивная компрессия
+        processed_bytes, success = optimize_image_for_upload(original_bytes)
+        
+        if not success:
+            return None, "Не удалось обработать изображение"
+        
+        # Проверка финального размера
+        size_mb = len(processed_bytes) / (1024 * 1024)
+        if size_mb > 5:
+            return None, f"Файл слишком большой: {size_mb:.1f} МБ (макс. 5 МБ)"
+        
+        # Отправка в OCR
+        processed_file = io.BytesIO(processed_bytes)
+        processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
+        processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
+        
+        for attempt in range(2):
             try:
                 response = requests.post(
                     'https://api.ocr.space/parse/image',
@@ -157,8 +171,7 @@ def extract_text_from_image(uploaded_file):
                         'isOverlayRequired': 'false',
                         'detectOrientation': 'true',
                         'OCREngine': '2',
-                        'scale': 'true',
-                        'isTable': 'true'
+                        'scale': 'true'
                     },
                     timeout=60
                 )
@@ -170,23 +183,21 @@ def extract_text_from_image(uploaded_file):
                         if text and text.strip():
                             return text.strip(), None
                     
-                    # Если API вернул ошибку, выводим подробную информацию
                     err_msg = data.get('ErrorMessage', ['Unknown error'])
                     if isinstance(err_msg, list):
                         err_msg = ' | '.join(err_msg)
-                    if attempt == 2:
-                        return None, f"Ошибка OCR API: {err_msg}"
-                    
+                    if attempt == 1:
+                        return None, f"Ошибка OCR: {err_msg}"
+                        
             except Exception as e:
-                if attempt == 2:
-                    return None, f"Ошибка соединения: {str(e)}"
-                
+                if attempt == 1:
+                    return None, f"Ошибка сети: {str(e)}"
                 continue
                 
-        return None, "Не удалось распознать текст после 3 попыток"
+        return None, "Не удалось распознать"
         
     except Exception as e:
-        return None, f"Ошибка обработки фото: {str(e)}"
+        return None, f"Ошибка обработки: {str(e)}"
 
 # =============================================================================
 # 🔄 СБРОС
@@ -318,11 +329,11 @@ if st.session_state.show_rules:
     
     with st.expander("1. Как пользоваться", expanded=True):
         st.markdown("""
-        **1.1.** Выберите юрисдикцию (Россия или Беларусь)
+        **1.1.** Выберите юрисдикцию
         
         **1.2.** Выберите тип договора
         
-        **1.3.** Загрузите фото из галереи телефона
+        **1.3.** Загрузите фото из галереи
         
         **1.4.** Нажмите «Распознать» (ждите 10-30 сек)
         
@@ -330,7 +341,7 @@ if st.session_state.show_rules:
         """)
     
     st.warning("**Важно:** Сервис не заменяет консультацию юриста.")
-    st.info("**Поддержка:** Используйте кнопку «Обновить» при проблемах.")
+    st.info("**Поддержка:** Используйте кнопку «Обновить».")
     st.divider()
 
 # НАСТРОЙКИ
@@ -340,12 +351,12 @@ with col_jur:
     st.markdown("**Юрисдикция:**")
     jur_option = st.selectbox(
         "Законодательство:",
-        options=["🇷🇺 Россия", "🇧 РБ"],
+        options=["🇷 🇺 Россия", "🇧 РБ"],
         index=0,
         key="jur_select",
         label_visibility="collapsed"
     )
-    st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
+    st.session_state.jurisdiction = "🇷 🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
 
 with col_type:
     st.markdown("**Тип договора:**")
@@ -376,6 +387,7 @@ tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"
 with tab_photo:
     st.markdown("#### Загрузка фото документа")
     st.markdown("💡 **Как загрузить:** Откройте Галерею → выберите фото → загрузите")
+    st.markdown("⚠️ **Важно:** Фото будут автоматически сжаты до оптимального размера")
     
     current_files = st.file_uploader(
         "Выберите фото",
@@ -412,11 +424,11 @@ with tab_photo:
                 status = st.empty()
                 all_text = ""
                 errors = []
+                success_count = 0
                 
                 st.markdown('<div class="loading-box">Распознавание текста...</div>', unsafe_allow_html=True)
                 
                 total = len(st.session_state.uploaded_files_list)
-                success_count = 0
                 
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
@@ -443,26 +455,26 @@ with tab_photo:
                     st.session_state.ocr_counter += 1
                     
                     if errors:
-                        st.warning(f"Не все страницы распознаны: {success_count}/{total} успешных")
+                        st.warning(f"Распознано: {success_count}/{total}")
                         st.markdown("""
-                        **Если текст получился плохим:**<br>
-                        1. Попробуйте сделать скриншот вместо фото<br>
-                        2. Уменьшите качество исходного фото<br>
-                        3. Выберите менее контрастный фон документа
+                        **Советы при ошибках:**<br>
+                        • Делайте скриншот вместо фотографии<br>
+                        • Уменьшите качество исходного фото<br>
+                        • Убедитесь что документ лежит ровно
                         """)
                     
-                    st.success(f"Распознано {success_count} из {total} страниц")
+                    st.success(f"Успешно: {success_count}/{total} страниц")
                     st.rerun()
                 else:
                     status.empty()
                     progress_bar.empty()
-                    st.error("Не удалось распознать ни одну страницу")
-                    st.error(f"Подробные ошибки: {' | '.join(errors)}")
-                    st.warning("""
-                    **Попробуйте:**<br>
-                    1. Сделать фото при хорошем освещении<br>
-                    2. Использовать скриншот вместо оригинальной фотографии<br>
-                    3. Уменьшить размер файла перед загрузкой
+                    st.error("Все страницы не распознаны")
+                    st.markdown("""
+                    **Попробуйте это:**<br>
+                    1. Сделайте новый снимок при хорошем освещении<br>
+                    2. Положите документ на светлую ровную поверхность<br>
+                    3. Не делайте резких движений камерой<br>
+                    4. Или используйте другой документ
                     """)
 
     st.divider()
