@@ -69,7 +69,7 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
     
     try:
-        jur_base = "Российская Федерация" if "РФ" в jurisdiction else "Республика Беларусь"
+        jur_base = "Российская Федерация" if "РФ" in jurisdiction else "Республика Беларусь"
         
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -326,7 +326,7 @@ with col_jur:
         key="jur_select",
         label_visibility="collapsed"
     )
-    st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" в jur_option else "🇧🇾 РБ"
+    st.session_state.jurisdiction = "🇷🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
 
 with col_type:
     st.markdown("**Тип договора:**")
