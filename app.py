@@ -50,10 +50,9 @@ if 'page_texts' not in st.session_state:
     st.session_state.page_texts = {}
 
 # =============================================================================
-# 🔤 КОРРЕКЦИЯ ТЕКСТА (внутренняя функция)
+# 🔤 КОРРЕКЦИЯ ТЕКСТА
 # =============================================================================
 def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
-    """Внутренняя обработка текста для улучшения читаемости"""
     api_key = None
     try:
         if "openrouter" in st.secrets:
@@ -198,13 +197,75 @@ st.markdown("""
     background: #1f77b4; color: white; font-weight: bold; border-radius: 8px; height: 50px; font-size: 16px; width: 100%;
 }
 .stButton#btn_new_session { background: #dc2626 !important; }
+.stButton#btn_rules { background: #2563eb !important; }
 h1 { font-size: 1.5rem !important; }
 .loading-box { background: #1a233a; border: 2px dashed #D4AF37; color: #D4AF37; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
 .success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
 .file-info { background: #262730; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #444; }
+
+/* Правила пользования */
+.rules-container {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+}
+.rules-section {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #30363d;
+}
+.rules-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+.rules-title {
+    color: #58a6ff;
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+.rules-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.rules-number {
+    background: #1f77b4;
+    color: white;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+.rules-warning {
+    background: #2d1f1f;
+    border-left: 4px solid #f85149;
+    padding: 15px;
+    border-radius: 0 8px 8px 0;
+    margin: 15px 0;
+}
+.rules-info {
+    background: #1f2937;
+    border-left: 4px solid #3b82f6;
+    padding: 15px;
+    border-radius: 0 8px 8px 0;
+    margin: 15px 0;
+}
+
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
+    .header-col { margin-bottom: 8px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -213,29 +274,92 @@ h1 { font-size: 1.5rem !important; }
 # 🏗 ИНТЕРФЕЙС
 # =============================================================================
 
-st.title("⚖️ Context.Pro")
-st.caption("Анализ договоров")
-
-col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
+# ШАПКА
+col_h1, col_h2, col_h3 = st.columns([2, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro")
+    st.caption("Анализ договоров")
 with col_h2:
-    if st.button("❓", use_container_width=True, key="btn_rules"):
+    if st.button("📋 Правила", use_container_width=True, key="btn_rules"):
         st.session_state.show_rules = not st.session_state.show_rules
 with col_h3:
-    if st.button("🔄", use_container_width=True, key="btn_reset"):
+    if st.button("🔄 Обновить", use_container_width=True, key="btn_reset"):
         reset_session()
+        st.success("✅ Сессия обновлена")
         st.rerun()
 
+# ПРАВИЛА ПОЛЬЗОВАНИЯ
 if st.session_state.show_rules:
-    st.info("📜 Загрузите фото документа → Текст будет распознан → Получите анализ")
+    st.markdown("""
+    <div class="rules-container">
+        <h2 style="color: #fff; margin-top: 0;">📜 Правила пользования сервисом</h2>
+        
+        <div class="rules-section">
+            <div class="rules-title">1️⃣ Назначение сервиса</div>
+            <div class="rules-item"><span class="rules-number">1.1</span><span>Сервис предназначен для анализа юридических документов (договоров, контрактов, соглашений)</span></div>
+            <div class="rules-item"><span class="rules-number">1.2</span><span>Пользователь может загрузить фото документа или вставить текст вручную</span></div>
+            <div class="rules-item"><span class="rules-number">1.3</span><span>Сервис предоставляет рекомендации на основе законодательства РФ или РБ</span></div>
+        </div>
+        
+        <div class="rules-section">
+            <div class="rules-title">2️⃣ Как пользоваться</div>
+            <div class="rules-item"><span class="rules-number">2.1</span><span>Выберите юрисдикцию (🇷 РФ или 🇧🇾 РБ) — это влияет на применяемые законы</span></div>
+            <div class="rules-item"><span class="rules-number">2.2</span><span>Перейдите во вкладку «📸 Фото» и загрузите изображение документа</span></div>
+            <div class="rules-item"><span class="rules-number">2.3</span><span>Дождитесь распознавания текста (10-30 секунд)</span></div>
+            <div class="rules-item"><span class="rules-number">2.4</span><span>Проверьте распознанный текст и при необходимости отредактируйте</span></div>
+            <div class="rules-item"><span class="rules-number">2.5</span><span>Нажмите «🚀 Анализировать» для получения результатов</span></div>
+        </div>
+        
+        <div class="rules-section">
+            <div class="rules-title">3️⃣ Требования к фото документа</div>
+            <div class="rules-item"><span class="rules-number">3.1</span><span>Фото должно быть чётким, без размытия</span></div>
+            <div class="rules-item"><span class="rules-number">3.2</span><span>Текст должен быть хорошо освещён, без теней и бликов</span></div>
+            <div class="rules-item"><span class="rules-number">3.3</span><span>Документ должен быть расположен ровно, без перекосов</span></div>
+            <div class="rules-item"><span class="rules-number">3.4</span><span>Поддерживаемые форматы: JPG, JPEG, PNG</span></div>
+            <div class="rules-item"><span class="rules-number">3.5</span><span>Максимальный размер файла: 5 MB</span></div>
+        </div>
+        
+        <div class="rules-section">
+            <div class="rules-title">4️⃣ Конфиденциальность</div>
+            <div class="rules-item"><span class="rules-number">4.1</span><span>Загруженные документы не сохраняются на сервере</span></div>
+            <div class="rules-item"><span class="rules-number">4.2</span><span>Данные удаляются после завершения сессии</span></div>
+            <div class="rules-item"><span class="rules-number">4.3</span><span>Сервис не передаёт данные третьим лицам</span></div>
+            <div class="rules-item"><span class="rules-number">4.4</span><span>Не загружайте документы с персональными данными (паспорт, ИНН и т.д.)</span></div>
+        </div>
+        
+        <div class="rules-section">
+            <div class="rules-title">5️⃣ Ограничения и отказ от ответственности</div>
+            <div class="rules-item"><span class="rules-number">5.1</span><span>Сервис предоставляет рекомендации информационного характера</span></div>
+            <div class="rules-item"><span class="rules-number">5.2</span><span>Результаты анализа не являются юридической консультацией</span></div>
+            <div class="rules-item"><span class="rules-number">5.3</span><span>Для важных решений обращайтесь к профессиональным юристам</span></div>
+            <div class="rules-item"><span class="rules-number">5.4</span><span>Сервис не несёт ответственности за решения, принятые на основе анализа</span></div>
+        </div>
+        
+        <div class="rules-warning">
+            <strong>⚠️ Важно:</strong> Сервис не заменяет очную консультацию юриста. Для сложных случаев и важных сделок обращайтесь к специалистам.
+        </div>
+        
+        <div class="rules-info">
+            <strong>ℹ️ Поддержка:</strong> При возникновении вопросов или технических проблем используйте кнопку «🔄 Обновить» для начала новой сессии.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.divider()
 
-jur = st.radio("Законодательство:", ["🇷 РФ", "🇧 РБ"], horizontal=True, label_visibility="collapsed", key="jur_rad")
-st.session_state.jurisdiction = "🇷 РФ" if "РФ" in jur else "🇧🇾 РБ"
+# ЮРИСДИКЦИЯ С ФЛАГАМИ
+st.markdown("**⚖️ Выберите юрисдикцию:**")
+jur = st.radio(
+    "Законодательство:",
+    ["🇷🇺 РФ — Россия", "🇧 РБ — Беларусь"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="jur_radio"
+)
+st.session_state.jurisdiction = "🇷🇺 РФ" if "РФ" in jur else "🇧🇾 РБ"
 st.divider()
 
+# ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["📸 Фото", "✍️ Текст", "💬 Вопрос"])
 
 # === ВКЛАДКА 1: ФОТО ===
@@ -288,7 +412,6 @@ with tab_photo:
                     else:
                         st.warning(f"Стр. {idx+1}: {error}")
                 
-                # Обработка текста
                 if all_text.strip():
                     status.text("Обработка текста...")
                     corrected = correct_text_smart(all_text, st.session_state.jurisdiction)
@@ -377,5 +500,12 @@ with tab_q:
             st.markdown("### 💡 Ответ")
             st.markdown(res)
 
+# FOOTER
 st.divider()
-st.caption("⚖️ Context.Pro Legal")
+st.markdown("""
+<div style="text-align: center; color: #555; font-size: 0.75rem; padding: 20px;">
+⚖️ <b>Context.Pro Legal</b><br>
+ Конфиденциально • Без сохранения данных<br>
+Не является публичной офертой
+</div>
+""", unsafe_allow_html=True)
