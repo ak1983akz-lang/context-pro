@@ -37,7 +37,7 @@ if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
 
 # =============================================================================
-# 🔤 КОРРЕКЦИЯ ТЕКСТА С ИСПРАВЛЕНИЕМ ОШИБОК
+# 🔤 КОРРЕКЦИЯ ТЕКСТА
 # =============================================================================
 def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
     api_key = None
@@ -63,7 +63,7 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
             json={
                 "model": "deepseek/deepseek-chat",
                 "messages": [
-                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки распознавания в тексте, не меняя смысл."},
+                    {"role": "system", "content": f"Ты — редактор юридических документов ({jur_base}). Исправь опечатки и ошибки распознавания в тексте."},
                     {"role": "user", "content": f"Исправь ошибки в тексте:\n\n{raw_text}"}
                 ],
                 "temperature": 0.1,
@@ -76,7 +76,6 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
             data = response.json()
             corrected = data["choices"][0]["message"]["content"]
             if corrected and corrected.strip():
-                # Убираем лишние пробелы и форматирование для сохранности
                 return re.sub(r'\s+', ' ', corrected).strip()
         
         return raw_text
@@ -84,19 +83,29 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (УЛУЧШЕННОЕ КАЧЕСТВО ДЛЯ ВСЕХ ФОТО)
+# 📸 OCR (УЛУЧШЕННОЕ ОБРАБОТКА С АЛЬТЕРНАТИВАМИ)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
-        uploaded_file.seek(0)
-        original_bytes = uploaded_file.read()
+        # Пробуем разные методы чтения файла
+        file_methods_success = False
+        
+        # Метод 1: прямой read
+        try:
+            uploaded_file.seek(0)
+            original_bytes = uploaded_file.read()
+            file_methods_success = True
+        except Exception:
+            uploaded_file.seek(0)
+            original_bytes = uploaded_file.read()
+            file_methods_success = True
         
         if not original_bytes or len(original_bytes) == 0:
-            return None, "Файл пустой"
+            return None, "Файл пустой или не был загружен"
         
         max_size = 8 * 1024 * 1024
         
-        # Оптимизация изображения перед отправкой
+        # Обработка изображения
         img = Image.open(io.BytesIO(original_bytes))
         
         # Конвертация в RGB
@@ -109,20 +118,20 @@ def extract_text_from_image(uploaded_file):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Масштабирование для лучшего качества
+        # Масштабирование для лучшего качества OCR
         width, height = img.size
         if width > 1920 or height > 1920:
             scale = min(1.0, 1920 / max(width, height))
             img = img.resize((int(width*scale), int(height*scale)), Image.Resampling.LANCZOS)
         
-        # Повышение резкости и контраста
+        # Улучшение резкости и контраста
         img = img.filter(ImageFilter.SHARPEN)
         enhancer = ImageEnhance.Sharpness(img)
         img = enhancer.enhance(1.5)
         enhancer = ImageEnhance.Contrast(img)
         img = enhancer.enhance(1.3)
         
-        # Сохранение в JPEG оптимального качества
+        # Сохранение в JPEG
         img_byte_arr = io.BytesIO()
         quality = 85
         img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
@@ -132,39 +141,52 @@ def extract_text_from_image(uploaded_file):
         if len(processed_bytes) > max_size:
             return None, "Файл слишком большой (макс. 8 МБ)"
         
-        processed_file = io.BytesIO(processed_bytes)
-        processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
-        processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
-        
-        response = requests.post(
-            'https://api.ocr.space/parse/image',
-            files={'file': (processed_file.name, processed_file, processed_file.type)},
-            data={
-                'apikey': 'helloworld',
-                'language': 'rus',
-                'isOverlayRequired': 'false',
-                'detectOrientation': 'true',
-                'OCREngine': '2',
-                'scale': 'true',
-                'isTable': 'true'
-            },
-            timeout=120
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if not data.get('IsErroredOnProcessing'):
-                text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
-                if text and text.strip():
-                    return text.strip(), None
-            else:
-                err = data.get('ErrorMessage', ['Unknown error'])
-                return None, err[0] if isinstance(err, list) else err
-        
-        return None, f"Ошибка OCR: {response.status_code}"
+        # Отправка в OCR с несколькими попытками
+        for attempt in range(3):
+            processed_file = io.BytesIO(processed_bytes)
+            processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
+            processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
+            
+            try:
+                response = requests.post(
+                    'https://api.ocr.space/parse/image',
+                    files={'file': (processed_file.name, processed_file, processed_file.type)},
+                    data={
+                        'apikey': 'helloworld',
+                        'language': 'rus',
+                        'isOverlayRequired': 'false',
+                        'detectOrientation': 'true',
+                        'OCREngine': '2',
+                        'scale': 'true',
+                        'isTable': 'true'
+                    },
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if not data.get('IsErroredOnProcessing'):
+                        text = data.get('ParsedResults', [{}])[0].get('ParsedText', '')
+                        if text and text.strip():
+                            return text.strip(), None
+                    
+                    # Если API вернул ошибку, выводим подробную информацию
+                    err_msg = data.get('ErrorMessage', ['Unknown error'])
+                    if isinstance(err_msg, list):
+                        err_msg = ' | '.join(err_msg)
+                    if attempt == 2:
+                        return None, f"Ошибка OCR API: {err_msg}"
+                    
+            except Exception as e:
+                if attempt == 2:
+                    return None, f"Ошибка соединения: {str(e)}"
+                
+                continue
+                
+        return None, "Не удалось распознать текст после 3 попыток"
         
     except Exception as e:
-        return None, f"Ошибка обработки: {str(e)}"
+        return None, f"Ошибка обработки фото: {str(e)}"
 
 # =============================================================================
 # 🔄 СБРОС
@@ -196,7 +218,7 @@ def get_api_key():
 def query_ai(system_prompt: str, user_text: str):
     api_key = get_api_key()
     if not api_key:
-        return None, "❌ API ключ не настроен"
+        return None, "API ключ не настроен"
     try:
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -219,7 +241,6 @@ def query_ai(system_prompt: str, user_text: str):
         if response.status_code == 200:
             data = response.json()
             result = data["choices"][0]["message"]["content"]
-            # Очистка текста от лишних символов
             return re.sub(r'\s+', ' ', result).strip(), None
         return None, "Ошибка сервиса"
     except Exception as e:
@@ -248,8 +269,6 @@ st.markdown("""
 }
 [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
 [data-testid="stFileUploaderInput"] { display: none; }
-
-/* Карта рисков */
 .risk-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -269,7 +288,6 @@ st.markdown("""
 .risk-card.verdict { border-color: #3b82f6; background: #1e3a5f; }
 .risk-number { font-size: 2.5rem; font-weight: bold; display: block; }
 .risk-label { font-size: 0.9rem; opacity: 0.8; }
-
 @media (max-width: 768px) {
     .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
     h1 { font-size: 1.3rem !important; }
@@ -322,7 +340,7 @@ with col_jur:
     st.markdown("**Юрисдикция:**")
     jur_option = st.selectbox(
         "Законодательство:",
-        options=["🇷🇺 Россия", "🇧🇾 Беларусь"],
+        options=["🇷🇺 Россия", "🇧 РБ"],
         index=0,
         key="jur_select",
         label_visibility="collapsed"
@@ -398,6 +416,8 @@ with tab_photo:
                 st.markdown('<div class="loading-box">Распознавание текста...</div>', unsafe_allow_html=True)
                 
                 total = len(st.session_state.uploaded_files_list)
+                success_count = 0
+                
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
                     
@@ -409,11 +429,12 @@ with tab_photo:
                         header = f"\n\n--- СТРАНИЦА {idx+1} ---\n\n" if idx > 0 else ""
                         all_text += header + text
                         st.session_state.page_texts[idx] = text
+                        success_count += 1
                         progress_bar.progress(int((idx+1)/total * 100))
                     else:
                         errors.append(f"Стр. {idx+1}: {error}")
                 
-                if all_text.strip():
+                if success_count > 0:
                     status.text("Обработка текста...")
                     corrected = correct_text_smart(all_text, st.session_state.jurisdiction)
                     
@@ -422,18 +443,27 @@ with tab_photo:
                     st.session_state.ocr_counter += 1
                     
                     if errors:
-                        st.error(f"Некоторые страницы не распознаны: {len(errors)} ошибок")
+                        st.warning(f"Не все страницы распознаны: {success_count}/{total} успешных")
+                        st.markdown("""
+                        **Если текст получился плохим:**<br>
+                        1. Попробуйте сделать скриншот вместо фото<br>
+                        2. Уменьшите качество исходного фото<br>
+                        3. Выберите менее контрастный фон документа
+                        """)
                     
-                    st.success(f"Готово! ({len(corrected)} символов)")
+                    st.success(f"Распознано {success_count} из {total} страниц")
                     st.rerun()
                 else:
                     status.empty()
                     progress_bar.empty()
-                    
-                    if errors:
-                        st.error(f"Все страницы ошиблись:\n{' '.join(errors)}")
-                    else:
-                        st.error("Текст не распознан ни на одной странице")
+                    st.error("Не удалось распознать ни одну страницу")
+                    st.error(f"Подробные ошибки: {' | '.join(errors)}")
+                    st.warning("""
+                    **Попробуйте:**<br>
+                    1. Сделать фото при хорошем освещении<br>
+                    2. Использовать скриншот вместо оригинальной фотографии<br>
+                    3. Уменьшить размер файла перед загрузкой
+                    """)
 
     st.divider()
     
@@ -472,7 +502,6 @@ with tab_photo:
                 st.success("✅ Готово!")
                 st.rerun()
         
-        # КАРТА РИСКОВ
         if st.session_state.result and st.session_state.risk_summary:
             st.divider()
             st.markdown("### Карта рисков")
@@ -504,7 +533,6 @@ with tab_photo:
             st.markdown("### Полный анализ")
             st.markdown(st.session_state.result)
             
-            # ✅ ИСПРАВЛЕННЫЙ КНОПКУ ЗАГРУЗКИ ОТЧЕТА
             st.download_button(
                 label="📥 Скачать отчёт",
                 data=st.session_state.result,
