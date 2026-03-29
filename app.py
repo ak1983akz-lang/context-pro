@@ -54,6 +54,10 @@ if 'page_texts' not in st.session_state:
 if 'risk_summary' not in st.session_state:
     st.session_state.risk_summary = None
 
+# Максимальный размер файла (1024 КБ для Streamlit Cloud)
+MAX_FILE_SIZE_KB = 800
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_KB * 1024
+
 # =============================================================================
 # 🔤 КОРРЕКЦИЯ ТЕКСТА
 # =============================================================================
@@ -101,20 +105,95 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (Упрощённая для мобил)
+# 🖼️ КОМПРЕССИЯ ИЗОБРАЖЕНИЯ (Обязательна для мобильных)
+# =============================================================================
+def compress_image_for_upload(file_bytes):
+    """Сжимает изображение до нужного размера"""
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        
+        # Конвертируем в RGB (нужно для JPEG)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        quality = 85
+        img_byte_arr = io.BytesIO()
+        
+        while quality >= 10:
+            # Масштабируем если слишком большой
+            width, height = img.size
+            
+            # Если ширина > 1920px, уменьшаем
+            scale_factor = min(1.0, 1920 / max(width, height))
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            
+            if scale_factor < 1.0:
+                img_scaled = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            else:
+                img_scaled = img
+            
+            img_scaled.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
+            
+            if len(img_byte_arr.getvalue()) <= MAX_FILE_SIZE_BYTES:
+                break
+            
+            quality -= 15
+            img_byte_arr.seek(0)
+        
+        img_byte_arr.seek(0)
+        compressed_bytes = img_byte_arr.read()
+        
+        if len(compressed_bytes) > MAX_FILE_SIZE_BYTES:
+            return None, f"Файл слишком большой даже после сжатия (макс. {MAX_FILE_SIZE_KB} КБ)"
+        
+        return compressed_bytes, None
+        
+    except Exception as e:
+        return None, f"Ошибка обработки фото: {str(e)}"
+
+# =============================================================================
+# 📸 OCR (С проверкой размера)
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
         
-        # Проверка размера (максимум 5 МБ для OCR API)
-        if len(file_bytes) > 5 * 1024 * 1024:
-            return None, f"Файл слишком большой ({round(len(file_bytes)/1024/1024, 1)} МБ). Максимум 5 МБ."
+        original_size_kb = round(len(file_bytes) / 1024, 1)
+        
+        # Проверка размера оригинала
+        if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+            # Пробуем сжать
+            st.info(f"⚠️ Фото размером {original_size_kb} КБ. Выполняется автоматическое сжатие...")
+            
+            compressed_bytes, error = compress_image_for_upload(file_bytes)
+            
+            if error:
+                return None, f"Не удалось загрузить фото: {error}"
+            
+            file_bytes = compressed_bytes
+            st.success("✅ Фото успешно сжато!")
+        
+        uploaded_file.close()
+        processed_file = io.BytesIO(file_bytes)
+        processed_file.name = uploaded_file.name
+        processed_file.type = uploaded_file.type
+        
+        # Проверка финального размера перед отправкой в OCR
+        final_size_kb = round(len(processed_file.getvalue()) / 1024, 1)
+        if final_size_kb > MAX_FILE_SIZE_KB + 100:  # Допустим небольшой запас
+            return None, f"Фото всё равно слишком большое: {final_size_kb} КБ (максимум {MAX_FILE_SIZE_KB} КБ)"
         
         response = requests.post(
             'https://api.ocr.space/parse/image',
-            files={'file': (uploaded_file.name, file_bytes, uploaded_file.type or 'image/jpeg')},
+            files={'file': (processed_file.name, processed_file, processed_file.type or 'image/jpeg')},
             data={
                 'apikey': 'helloworld',
                 'language': 'rus',
@@ -209,7 +288,7 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🎨 CSS (СКРЫТ ЛИМИТ + МОБИЛЬНАЯ АДАПТАЦИЯ)
+# 🎨 CSS
 # =============================================================================
 st.markdown("""
 <style>
@@ -218,46 +297,13 @@ st.markdown("""
 .stButton>button { 
     background: #1f77b4; color: white; font-weight: bold; border-radius: 8px; height: 50px; font-size: 16px; width: 100%;
 }
-.stButton#btn_new_session { background: #dc2626 !important; }
-.stButton#btn_rules { background: #2563eb !important; }
-h1 { font-size: 1.5rem !important; }
-.loading-box { background: #1a233a; border: 2px dashed #D4AF37; color: #D4AF37; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; }
-.success-box { background: #1a3a2a; border-left: 4px solid #22c55e; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; color: #4ade80; }
-.file-info { background: #262730; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #444; }
-
-/* СКРЫТЬ ЛИМИТ 200MB */
-[data-testid="stFileUploader"] small {
-    display: none !important;
-}
-[data-testid="stFileUploaderDropzoneInstructions"] {
-    display: none !important;
-}
-
-/* Карта рисков */
-.risk-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-    margin: 20px 0;
-}
-.risk-card {
-    background: #1e2329;
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-    border: 2px solid;
-}
-.risk-card.critical { border-color: #ef4444; }
-.risk-card.medium { border-color: #f59e0b; }
-.risk-card.low { border-color: #22c55e; }
-.risk-card.verdict { border-color: #3b82f6; background: #1e3a5f; }
-.risk-number { font-size: 2.5rem; font-weight: bold; display: block; }
-.risk-label { font-size: 0.9rem; opacity: 0.8; }
-
-@media (max-width: 768px) {
-    .block-container { padding-top: max(1rem, env(safe-area-inset-top)) !important; }
-    h1 { font-size: 1.3rem !important; }
-    .risk-cards { grid-template-columns: 1fr 1fr; }
+.hint-warning {
+    background: #2d1f1f;
+    border-left: 4px solid #f85149;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -318,7 +364,7 @@ if st.session_state.show_rules:
         
         **3.4.** Поддерживаемые форматы: JPG, JPEG, PNG
         
-        **3.5.** Максимальный размер файла: 5 МБ
+        **3.5.** ⚠️ **Важно:** Размер фото не более **800 КБ** (автоматическое сжатие включено)
         """)
     
     with st.expander("4. Конфиденциальность", expanded=False):
@@ -388,25 +434,37 @@ st.divider()
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО (УПРОЩЁННАЯ ДЛЯ МОБИЛЬНЫХ) ===
+# === ВКЛАДКА 1: ФОТО (С АВТОМАТИЧЕСКИМ СЖАТИЕМ) ===
 with tab_photo:
     st.markdown("#### 📄 Загрузка фото документа")
-    st.info("💡 Нажмите кнопку ниже → выберите фото из галереи → загрузите документ")
     
-    # Упростим загрузчик для мобильных
+    st.markdown(f"""
+    <div class="hint-warning">
+    <strong>⚠️ Лимит загрузок:</strong><br>
+    Из-за ограничений облачного хостинга, максимальный размер фото составляет **{MAX_FILE_SIZE_KB} КБ**.<br>
+    Фото большего размера будут автоматически сжаты перед загрузкой.
+    </div>
+    """, unsafe_allow_html=True)
+    
     current_files = st.file_uploader(
         "Загрузить фото из галереи",
-        type=["jpg", "jpeg", "png"],  # Только основные форматы
-        accept_multiple_files=False,  # Один файл за раз (работает стабильнее на мобилках)
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=False,
         key=f"up_{st.session_state.ocr_counter}",
         label_visibility="collapsed",
-        help="Выберите из галереи телефона"
+        help="Максимум {MAX_FILE_SIZE_KB} КБ"
     )
     
     if current_files:
+        file_info = current_files
+        original_size_kb = round(file_info.size / 1024, 1)
+        
+        if file_info.size > MAX_FILE_SIZE_BYTES:
+            st.warning(f"⚠️ Фото больше {MAX_FILE_SIZE_KB} КБ (размер: {original_size_kb} КБ). Будет выполнено автоматическое сжатие.")
+        
         # Добавляем файл если его ещё нет
-        if not any(x.name == current_files.name and x.size == current_files.size for x in st.session_state.uploaded_files_list):
-            st.session_state.uploaded_files_list.append(current_files)
+        if not any(x.name == file_info.name and x.size == file_info.size for x in st.session_state.uploaded_files_list):
+            st.session_state.uploaded_files_list.append(file_info)
         
         st.success(f"✅ Загружено файлов: {len(st.session_state.uploaded_files_list)}")
         
@@ -431,7 +489,6 @@ with tab_photo:
                 for idx, file in enumerate(st.session_state.uploaded_files_list):
                     status.text(f"Страница {idx+1}/{total}...")
                     
-                    # ВАЖНО: сбрасываем позицию перед чтением
                     file.seek(0)
                     
                     text, error = extract_text_from_image(file)
