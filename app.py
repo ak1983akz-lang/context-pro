@@ -7,24 +7,6 @@ import re
 from datetime import datetime
 
 # =============================================================================
-# 📱 PWA MANIFEST
-# =============================================================================
-pwa_manifest = """
-<link rel="manifest" href="application/manifest+json,{
-    &quot;name&quot;: &quot;Context.Pro Legal&quot;,
-    &quot;short_name&quot;: &quot;ContextPro&quot;,
-    &quot;start_url&quot;: &quot;/&quot;,
-    &quot;display&quot;: &quot;standalone&quot;,
-    &quot;background_color&quot;: &quot;#0e1117&quot;,
-    &quot;theme_color&quot;: &quot;#1f77b4&quot;
-}">
-<meta name="theme-color" content="#1f77b4">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-"""
-st.markdown(pwa_manifest, unsafe_allow_html=True)
-
-# =============================================================================
 # SESSION STATE
 # =============================================================================
 if 'contract_txt' not in st.session_state:
@@ -101,7 +83,7 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
         return raw_text
 
 # =============================================================================
-# 📸 OCR (АВТОКОМПРЕССИЯ ДЛЯ МОБИЛЬНЫХ)
+# 📸 OCR
 # =============================================================================
 def extract_text_from_image(uploaded_file):
     try:
@@ -224,7 +206,7 @@ def query_ai(system_prompt: str, user_text: str):
         return None, "Ошибка соединения"
 
 # =============================================================================
-# 📊 ИЗВЛЕЧЕНИЕ КРАТКИХ ИТОГОВ
+# 📊 ИЗВЛЕЧЕНИЕ ИТОГОВ
 # =============================================================================
 def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     return {
@@ -246,7 +228,6 @@ st.markdown("""
 }
 [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
 [data-testid="stFileUploaderInput"] { display: none; }
-.stFileUploaderDropzone { border: 2px dashed #333; padding: 20px; border-radius: 12px; margin-top: 10px; cursor: pointer; }
 
 /* Карта рисков */
 .risk-cards {
@@ -278,10 +259,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# 🏗 ИНТЕРФЕЙС
-# =============================================================================
-
 # ШАПКА
+# =============================================================================
 col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
 with col_h1:
     st.title("⚖️ Context.Pro")
@@ -305,7 +284,7 @@ if st.session_state.show_rules:
         
         **1.2.** Выберите тип договора для более точного анализа
         
-        **1.3.** **Загрузите фото из галереи телефона** (не камера напрямую)
+        **1.3.** Загрузите фото из галереи телефона
         
         **1.4.** Нажмите «Распознать» и дождитесь результата (10-30 секунд)
         
@@ -313,12 +292,10 @@ if st.session_state.show_rules:
         """)
     
     st.warning("**Важно:** Сервис не заменяет консультацию юриста.")
-    
     st.info("**Поддержка:** Используйте кнопку «Обновить» при проблемах.")
-    
     st.divider()
 
-# НАСТРОЙКИ: ЮРИСДИКЦИЯ + ТИП ДОГОВОРА
+# НАСТРОЙКИ
 col_jur, col_type = st.columns(2)
 
 with col_jur:
@@ -357,19 +334,17 @@ st.divider()
 # ВКЛАДКИ
 tab_photo, tab_manual, tab_q = st.tabs(["Фото", "Текст", "Вопрос"])
 
-# === ВКЛАДКА 1: ФОТО (ОЧИЩЕННЫЙ ИНТЕРФЕЙС) ===
+# === ФОТО ===
 with tab_photo:
-    st.markdown("#### 📄 Загрузка фото документа")
-    
-    st.markdown("💡 **Как загрузить фото:**\nОткройте **Галерею** → выберите фото → нажмите загрузить")
+    st.markdown("#### Загрузка фото документа")
+    st.markdown("💡 Откройте Галерею → выберите фото → загрузите")
     
     current_files = st.file_uploader(
-        "Выберите фото из галереи",
+        "Выберите фото",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True,
         key=f"up_{st.session_state.ocr_counter}",
-        label_visibility="hidden",
-        help="Выбирайте фото из галереи телефона"
+        label_visibility="hidden"
     )
     
     if current_files:
@@ -382,7 +357,7 @@ with tab_photo:
             if not any(x.name == f.name and x.size == f.size for x in st.session_state.uploaded_files_list):
                 st.session_state.uploaded_files_list.append(f)
         
-        st.success(f"✅ Файлов: {len(st.session_state.uploaded_files_list)}")
+        st.success(f"Файлов: {len(st.session_state.uploaded_files_list)}")
         
         for i, f in enumerate(st.session_state.uploaded_files_list):
             size_kb = round(f.size / 1024, 1)
@@ -424,7 +399,7 @@ with tab_photo:
                     st.session_state.contract_txt = corrected
                     st.session_state.ocr_complete = True
                     st.session_state.ocr_counter += 1
-                    st.success(f"✅ Готово! ({len(corrected)} символов)")
+                    st.success(f"Готово! ({len(corrected)} символов)")
                     st.rerun()
                 
                 status.empty()
@@ -451,13 +426,11 @@ with tab_photo:
             
             jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
             prompt = f"""Юрист-эксперт по праву {jur_base}. Тип договора: {st.session_state.contract_type}.
-Проанализируй договор и укажи:
-1. Ключевые риски с уровнем опасности (🔴 Критический / 🟡 Средний / 🟢 Низкий)
+Проанализируй договор:
+1. Риски с уровнем опасности (🔴 Критический / 🟡 Средний / 🟢 Низкий)
 2. Что составлено грамотно
 3. Рекомендации по изменению пунктов
-4. Итоговый вердикт (Безопасно / Требует правок / Опасно)
-
-Используй эмодзи 🔴🟡🟢 для маркировки рисков."""
+4. Итоговый вердикт (Безопасно / Требует правок / Опасно)"""
             
             res, err = query_ai(prompt, txt)
             
@@ -530,7 +503,7 @@ with tab_photo:
             st.divider()
             st.markdown(st.session_state.result)
 
-# === ВКЛАДКА 2: РУЧНОЙ ВВОД ===
+# === РУЧНОЙ ВВОД ===
 with tab_manual:
     st.markdown("#### Вставьте текст")
     txt = st.text_area("Текст:", value=st.session_state.contract_txt, height=400, key="man_area", label_visibility="collapsed")
@@ -578,7 +551,7 @@ with tab_manual:
         st.divider()
         st.markdown(st.session_state.result)
 
-# === ВКЛАДКА 3: ВОПРОС ===
+# === ВОПРОС ===
 with tab_q:
     st.markdown("#### Юридический вопрос")
     q = st.text_area("Вопрос:", value=st.session_state.question_txt, height=200, key="q_ar", label_visibility="collapsed")
