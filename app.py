@@ -267,18 +267,46 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🌉 VK BRIDGE INIT
+# 🌉 VK BRIDGE INIT (УЛУЧШЕННАЯ ВЕРСИЯ)
 # =============================================================================
 def init_vk_bridge():
-    """Подключает VK Bridge и отправляет событие инициализации"""
+    """Подключает VK Bridge с проверкой окружения и динамической загрузкой"""
     vk_bridge_script = """
-    <script src="https://unpkg.com/@vkontakte/vk-bridge@latest/browser/vk-bridge.min.js"></script>
     <script>
-        if (window.vkBridge) {
-            window.vkBridge.send('VKWebAppInit')
-                .then(() => console.log('✅ VK Bridge initialized'))
-                .catch(error => console.log('❌ VK Bridge init error:', error));
-        }
+        (function() {
+            // Проверяем, находимся ли мы внутри VK
+            var isVk = window.location.href.indexOf('vk.com') !== -1 || 
+                       (window.parent !== window && document.referrer.indexOf('vk.com') !== -1);
+            
+            if (isVk) {
+                console.log('🔍 VK environment detected, loading bridge...');
+                
+                function initBridge() {
+                    if (window.vkBridge) {
+                        window.vkBridge.send('VKWebAppInit')
+                            .then(function() { console.log('✅ VK Bridge initialized'); })
+                            .catch(function(err) { console.log('❌ VK Bridge error:', err); });
+                    } else {
+                        console.log('⏳ Waiting for vkBridge...');
+                        setTimeout(initBridge, 500);
+                    }
+                }
+
+                // Если скрипт уже есть, просто инициализируем
+                if (document.querySelector('script[src*="vk-bridge"]')) {
+                    initBridge();
+                } else {
+                    // Иначе создаем скрипт динамически
+                    var script = document.createElement('script');
+                    script.src = 'https://unpkg.com/@vkontakte/vk-bridge@latest/browser/vk-bridge.min.js';
+                    script.onload = initBridge;
+                    script.onerror = function() { console.log('❌ Failed to load vk-bridge'); };
+                    document.head.appendChild(script);
+                }
+            } else {
+                console.log('ℹ️ Not running in VK environment');
+            }
+        })();
     </script>
     """
     st.markdown(vk_bridge_script, unsafe_allow_html=True)
@@ -322,7 +350,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Инициализация VK Bridge (обязательно для VK Mini Apps)
+# 🚀 Инициализация VK Bridge (строго до интерфейса!)
 init_vk_bridge()
 
 # =============================================================================
@@ -374,7 +402,7 @@ with col_jur:
         key="jur_select",
         label_visibility="collapsed"
     )
-    st.session_state.jurisdiction = "🇷 🇺 РФ" if "Россия" in jur_option else "🇧🇾 РБ"
+    st.session_state.jurisdiction = "🇷  РФ" if "Россия" in jur_option else "🇧🇾 РБ"
 
 with col_type:
     st.markdown("**Тип договора:**")
