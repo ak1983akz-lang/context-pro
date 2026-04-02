@@ -267,49 +267,36 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
     }
 
 # =============================================================================
-# 🌉 VK BRIDGE INIT (УЛУЧШЕННАЯ ВЕРСИЯ)
+# 🌉 VK BRIDGE INIT (АГРЕССИВНАЯ ВЕРСИЯ)
 # =============================================================================
 def init_vk_bridge():
-    """Подключает VK Bridge с проверкой окружения и динамической загрузкой"""
-    vk_bridge_script = """
+    """Попытка инициализации VK Bridge (последний шанс для Streamlit)"""
+    vk_init = """
     <script>
-        (function() {
-            // Проверяем, находимся ли мы внутри VK
-            var isVk = window.location.href.indexOf('vk.com') !== -1 || 
-                       (window.parent !== window && document.referrer.indexOf('vk.com') !== -1);
-            
-            if (isVk) {
-                console.log('🔍 VK environment detected, loading bridge...');
-                
-                function initBridge() {
-                    if (window.vkBridge) {
-                        window.vkBridge.send('VKWebAppInit')
-                            .then(function() { console.log('✅ VK Bridge initialized'); })
-                            .catch(function(err) { console.log('❌ VK Bridge error:', err); });
-                    } else {
-                        console.log('⏳ Waiting for vkBridge...');
-                        setTimeout(initBridge, 500);
-                    }
-                }
-
-                // Если скрипт уже есть, просто инициализируем
-                if (document.querySelector('script[src*="vk-bridge"]')) {
-                    initBridge();
-                } else {
-                    // Иначе создаем скрипт динамически
-                    var script = document.createElement('script');
-                    script.src = 'https://unpkg.com/@vkontakte/vk-bridge@latest/browser/vk-bridge.min.js';
-                    script.onload = initBridge;
-                    script.onerror = function() { console.log('❌ Failed to load vk-bridge'); };
-                    document.head.appendChild(script);
-                }
-            } else {
-                console.log('ℹ️ Not running in VK environment');
+    (function initVK() {
+        if (window.vkBridge) {
+            try {
+                window.vkBridge.send('VKWebAppInit');
+                console.log("VK Bridge init sent immediately");
+            } catch(e) {
+                console.error("VK Bridge init error:", e);
             }
-        })();
+        } else {
+            var script = document.createElement('script');
+            script.src = 'https://unpkg.com/@vkontakte/vk-bridge@latest/browser/vk-bridge.min.js';
+            script.onload = function() {
+                if (window.vkBridge) {
+                    window.vkBridge.send('VKWebAppInit');
+                    console.log("VK Bridge loaded and init sent");
+                }
+            };
+            script.onerror = function() { console.error("Failed to load VK Bridge script"); };
+            document.head.appendChild(script);
+        }
+    })();
     </script>
     """
-    st.markdown(vk_bridge_script, unsafe_allow_html=True)
+    st.markdown(vk_init, unsafe_allow_html=True)
 
 # =============================================================================
 # 🎨 CSS
@@ -350,7 +337,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 🚀 Инициализация VK Bridge (строго до интерфейса!)
+# 🚀 Инициализация VK Bridge (сразу после CSS, до интерфейса)
 init_vk_bridge()
 
 # =============================================================================
@@ -402,7 +389,7 @@ with col_jur:
         key="jur_select",
         label_visibility="collapsed"
     )
-    st.session_state.jurisdiction = "🇷  РФ" if "Россия" in jur_option else "🇧🇾 РБ"
+    st.session_state.jurisdiction = "🇷 🇺 РФ" if "Россия" in jur_option else "🇧 РБ"
 
 with col_type:
     st.markdown("**Тип договора:**")
@@ -638,7 +625,7 @@ with tab_manual:
         jur_base = "РФ" if "РФ" in st.session_state.jurisdiction else "РБ"
         prompt = f"""Юрист-эксперт по праву {jur_base}. Тип договора: {st.session_state.contract_type}.
 Проанализируй договор:
-1. Риски (🔴/🟡/🟢)
+1. Риски (🔴//🟢)
 2. Плюсы
 3. Рекомендации
 4. Итог"""
