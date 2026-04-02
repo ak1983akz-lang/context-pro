@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 import requests
 import time
 from PIL import Image
@@ -40,12 +41,13 @@ if 'risk_summary' not in st.session_state:
 # 🔤 КОРРЕКЦИЯ ТЕКСТА
 # =============================================================================
 def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
-    api_key = None
-    try:
-        if "openrouter" in st.secrets:
-            api_key = st.secrets["openrouter"]["api_key"]
-    except:
-        pass
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        try:
+            if "openrouter" in st.secrets:
+                api_key = st.secrets["openrouter"]["api_key"]
+        except:
+            pass
     
     if not api_key or len(raw_text) < 50:
         return raw_text
@@ -58,7 +60,7 @@ def correct_text_smart(raw_text: str, jurisdiction: str) -> str:
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://context-pro.streamlit.app"
+                "HTTP-Referer": os.getenv("APP_URL", "https://context-pro.streamlit.app")
             },
             json={
                 "model": "deepseek/deepseek-chat",
@@ -90,7 +92,6 @@ def optimize_image_for_upload(original_bytes):
     try:
         img = Image.open(io.BytesIO(original_bytes))
         
-        # Конвертация в RGB
         if img.mode in ('RGBA', 'LA', 'P'):
             background = Image.new('RGB', img.size, (255, 255, 255))
             if img.mode == 'P':
@@ -100,10 +101,8 @@ def optimize_image_for_upload(original_bytes):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Масштабирование
         width, height = img.size
         
-        # Если фото очень большое, масштабируем
         if width > 1600 or height > 1600:
             scale = min(1.0, 1600 / max(width, height))
             new_width = int(width * scale)
@@ -111,11 +110,9 @@ def optimize_image_for_upload(original_bytes):
             img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
             width, height = new_width, new_height
         
-        # Начинаем с высокого качества, постепенно снижаем до достижения 500 КБ
         quality = 80
         img_byte_arr = io.BytesIO()
-        
-        target_size = 500 * 1024  # 500 КБ
+        target_size = 500 * 1024
         
         while quality >= 10:
             img.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
@@ -144,18 +141,15 @@ def extract_text_from_image(uploaded_file):
         if not original_bytes or len(original_bytes) == 0:
             return None, "Файл пустой"
         
-        # Максимально агрессивная компрессия
         processed_bytes, success = optimize_image_for_upload(original_bytes)
         
         if not success:
             return None, "Не удалось обработать изображение"
         
-        # Проверка финального размера
         size_mb = len(processed_bytes) / (1024 * 1024)
         if size_mb > 5:
             return None, f"Файл слишком большой: {size_mb:.1f} МБ (макс. 5 МБ)"
         
-        # Отправка в OCR
         processed_file = io.BytesIO(processed_bytes)
         processed_file.name = getattr(uploaded_file, 'name', 'photo.jpg')
         processed_file.type = getattr(uploaded_file, 'type', 'image/jpeg')
@@ -166,7 +160,7 @@ def extract_text_from_image(uploaded_file):
                     'https://api.ocr.space/parse/image',
                     files={'file': (processed_file.name, processed_file, processed_file.type)},
                     data={
-                        'apikey': 'helloworld',
+                        'apikey': os.getenv("OCR_API_KEY", "helloworld"),
                         'language': 'rus',
                         'isOverlayRequired': 'false',
                         'detectOrientation': 'true',
@@ -219,6 +213,10 @@ def reset_session():
 # 🧠 АНАЛИЗ ДОГОВОРА
 # =============================================================================
 def get_api_key():
+    """Получение ключа OpenRouter: приоритет — env, затем st.secrets"""
+    key = os.getenv("OPENROUTER_API_KEY")
+    if key:
+        return key
     try:
         if "openrouter" in st.secrets:
             return st.secrets["openrouter"]["api_key"]
@@ -236,7 +234,7 @@ def query_ai(system_prompt: str, user_text: str):
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://context-pro.streamlit.app"
+                "HTTP-Referer": os.getenv("APP_URL", "https://context-pro.streamlit.app")
             },
             json={
                 "model": "deepseek/deepseek-chat",
@@ -267,6 +265,23 @@ def extract_risk_summary(full_result: str, contract_type: str) -> dict:
         "low": full_result.count("🟢"),
         "verdict": "Требует правок" if "требует" in full_result.lower() else "Нормально"
     }
+
+# =============================================================================
+# 🌉 VK BRIDGE INIT
+# =============================================================================
+def init_vk_bridge():
+    """Подключает VK Bridge и отправляет событие инициализации"""
+    vk_bridge_script = """
+    <script src="https://unpkg.com/@vkontakte/vk-bridge@latest/browser/vk-bridge.min.js"></script>
+    <script>
+        if (window.vkBridge) {
+            window.vkBridge.send('VKWebAppInit')
+                .then(() => console.log('✅ VK Bridge initialized'))
+                .catch(error => console.log('❌ VK Bridge init error:', error));
+        }
+    </script>
+    """
+    st.markdown(vk_bridge_script, unsafe_allow_html=True)
 
 # =============================================================================
 # 🎨 CSS
@@ -306,6 +321,9 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+# Инициализация VK Bridge (обязательно для VK Mini Apps)
+init_vk_bridge()
 
 # =============================================================================
 # ШАПКА
