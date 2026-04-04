@@ -6,15 +6,11 @@ from PIL import Image
 import io
 
 # =============================================================================
-# 🔑 НАСТРОЙКИ API (ЗАПОЛНИ СВОИ КЛЮЧИ)
+# 🔑 НАСТРОЙКИ API
 # =============================================================================
-# Вариант 1: Вставь ключи прямо сюда (для тестов)
-MANUAL_OCR_KEY = ""          # Вставь ключ от ocr.space
-MANUAL_OPENROUTER_KEY = ""   # Вставь ключ от openrouter.ai
-
-# Вариант 2: Streamlit Cloud автоматически подтянет из Secrets (рекомендуется)
-OCR_API_KEY = MANUAL_OCR_KEY or st.secrets.get("OCR_API_KEY", os.getenv("OCR_API_KEY", "helloworld"))
-OPENROUTER_API_KEY = MANUAL_OPENROUTER_KEY or st.secrets.get("OPENROUTER_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+# Ключи берутся из Secrets Streamlit Cloud или переменных окружения
+OCR_API_KEY = st.secrets.get("OCR_API_KEY", os.getenv("OCR_API_KEY", "helloworld"))
+OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
 MODEL_NAME = "deepseek/deepseek-chat"
 
 # =============================================================================
@@ -25,30 +21,25 @@ if 'result' not in st.session_state: st.session_state.result = None
 if 'risk_summary' not in st.session_state: st.session_state.risk_summary = None
 if 'jurisdiction' not in st.session_state: st.session_state.jurisdiction = "RU"
 if 'contract_type' not in st.session_state: st.session_state.contract_type = "Другое"
+if 'question_answer' not in st.session_state: st.session_state.question_answer = None
 
 # =============================================================================
-# 🌉 VK BRIDGE
+# 🌉 VK BRIDGE & CSS
 # =============================================================================
 st.markdown("""
-<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+<script src="https://unpkg.com/@vkontakte/vk-bridge@2.1.5/dist/browser.min.js"></script>
 <script>
-if (window.vkBridge) {
-    vkBridge.send('VKWebAppInit').catch(()=>{});
-}
-function haptic(style) {
-    if (window.vkBridge) vkBridge.send('VKWebAppTapticImpactOccurred', {style}).catch(()=>{});
-}
+    if (window.vkBridge) {
+        vkBridge.send('VKWebAppInit').catch(()=>{});
+    }
 </script>
 """, unsafe_allow_html=True)
 
-# =============================================================================
-# 🎨 СТИЛИ
-# =============================================================================
 st.markdown("""
 <style>
     #MainMenu, footer, .stDeployButton {visibility: hidden;}
     .stApp { background: #0e1117; color: #fafafa; }
-    .stTextArea textarea { background: #1e2329 !important; color: #fff !important; border: 1px solid #3a3f47 !important; }
+    .stTextArea textarea { background: #1e2329 !important; color: #fff !important; border: 1px solid #3a3f47 !important; border-radius: 8px !important; }
     .stButton>button { 
         background: #1f77b4 !important; color: white !important; 
         border: none !important; border-radius: 8px !important; 
@@ -68,6 +59,7 @@ st.markdown("""
     .risk-label { font-size: 11px; color: #a0a0a0; }
     .result-box { background: #1e2329; border-radius: 10px; padding: 16px; margin-top: 15px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; border: 1px solid #3a3f47; }
     .answer-box { background: #1e3a5f; border-radius: 10px; padding: 16px; margin-top: 15px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; border: 1px solid #1f77b4; }
+    .hint { color: #888; font-size: 13px; margin-bottom: 8px; }
     @media (max-width: 600px) { .risk-cards { grid-template-columns: repeat(2, 1fr); } }
 </style>
 """, unsafe_allow_html=True)
@@ -98,7 +90,8 @@ def compress_image(file_bytes, max_size_kb=500):
     except: return file_bytes
 
 def call_openrouter(system_prompt, user_text, max_tokens=3000):
-    if not OPENROUTER_API_KEY: return None, "⚠️ API ключ OpenRouter не настроен. Добавь его в настройки Streamlit Cloud."
+    if not OPENROUTER_API_KEY: 
+        return None, "⚠️ Ключ OpenRouter не найден. Добавь его в Secrets Streamlit Cloud."
     try:
         resp = requests.post('https://openrouter.ai/api/v1/chat/completions',
             headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json', 'HTTP-Referer': 'https://context-pro.streamlit.app'},
@@ -126,7 +119,7 @@ def ocr_space(file_bytes, filename="img.jpg"):
 def correct_text(text, jurisdiction):
     if len(text) < 50: return text
     jur_name = 'Российская Федерация' if jurisdiction == 'RU' else 'Республика Беларусь'
-    sys_prompt = f"Ты редактор юридических документов ({jur_name}). Исправь опечатки и ошибки распознавания, сохрани юридический смысл и структуру."
+    sys_prompt = f"Ты редактор юридических документов ({jur_name}). Исправь опечатки и ошибки распознавания, сохрани юридический смысл."
     res, err = call_openrouter(sys_prompt, f"Исправь текст:\n\n{text}", max_tokens=3000)
     return res if not err else text
 
@@ -134,17 +127,17 @@ def analyze_contract(text, jurisdiction, contract_type):
     jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
     sys_prompt = f"""Ты опытный юрист по праву {jur_base}. Специализация: {contract_type}.
 Проанализируй договор строго по структуре:
-1. 🔴 Критические риски (нарушения закона, кабальные условия)
-2. 🟡 Средние риски (неоднозначные формулировки)
+1. 🔴 Критические риски
+2. 🟡 Средние риски
 3. 🟢 Что составлено грамотно
-4. 💡 Конкретные рекомендации по правкам
+4. 💡 Рекомендации по правкам
 5. ✅ Итоговый вердикт: Безопасно / Требует правок / Опасно
 Отвечай чётко, без воды."""
     return call_openrouter(sys_prompt, text)
 
 def ask_question(question, jurisdiction):
     jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
-    sys_prompt = f"Ты практикующий юрист ({jur_base}). Отвечай на вопросы граждан, ссылаясь на статьи законов (ГК РФ/РБ, ТК РФ/РБ и т.д.). Формат: краткий ответ -> правовое обоснование -> рекомендация."
+    sys_prompt = f"Ты практикующий юрист ({jur_base}). Отвечай на вопросы граждан, ссылаясь на статьи законов. Формат: краткий ответ -> правовое обоснование -> рекомендация."
     return call_openrouter(sys_prompt, question, max_tokens=2000)
 
 def extract_risks(text):
@@ -176,7 +169,8 @@ tab_photo, tab_text, tab_question = st.tabs(["📸 Фото документа",
 
 # === ВКЛАДКА 1: ФОТО ===
 with tab_photo:
-    uploaded = st.file_uploader("Загрузи фото или скан договора (JPG/PNG)", type=['jpg','jpeg','png'], label_visibility="collapsed")
+    st.markdown('<p class="hint">Загрузи фото или скан договора (JPG/PNG, до 5 МБ)</p>', unsafe_allow_html=True)
+    uploaded = st.file_uploader("", type=['jpg','jpeg','png'], label_visibility="collapsed")
     if uploaded:
         with st.spinner("🔍 Распознаю текст и исправляю ошибки..."):
             raw_text, err = ocr_space(uploaded.read(), uploaded.name)
@@ -200,7 +194,8 @@ with tab_photo:
 
 # === ВКЛАДКА 2: ТЕКСТ ===
 with tab_text:
-    txt = st.text_area("Вставь текст договора сюда:", height=200, label_visibility="collapsed")
+    st.markdown('<p class="hint">Вставь текст договора вручную</p>', unsafe_allow_html=True)
+    txt = st.text_area("", height=200, label_visibility="collapsed")
     if st.button("⚖️ Анализировать", disabled=len(txt)<50):
         with st.spinner("🧠 AI анализирует..."):
             res, err = analyze_contract(txt, st.session_state.jurisdiction, st.session_state.contract_type)
@@ -212,15 +207,16 @@ with tab_text:
 
 # === ВКЛАДКА 3: ВОПРОС ===
 with tab_question:
-    q = st.text_area("Задай вопрос юристу (например: 'Может ли работодатель удержать зарплату за штраф?')", height=120, label_visibility="collapsed")
+    st.markdown('<p class="hint">Задай вопрос юристу (например: "Может ли работодатель удержать зарплату за штраф?")</p>', unsafe_allow_html=True)
+    q = st.text_area("", height=120, label_visibility="collapsed")
     if st.button("💬 Получить ответ", disabled=len(q)<5):
-        with st.spinner(" Ищу правовое обоснование..."):
+        with st.spinner("🔍 Ищу правовое обоснование..."):
             ans, err = ask_question(q, st.session_state.jurisdiction)
             if err: st.error(err)
             else:
                 st.session_state.question_answer = ans
                 st.rerun()
-    if 'question_answer' in st.session_state and st.session_state.question_answer:
+    if st.session_state.question_answer:
         st.markdown("### 📜 Ответ юриста:")
         st.markdown(f"<div class='answer-box'>{st.session_state.question_answer}</div>", unsafe_allow_html=True)
         if st.button("🗑 Очистить ответ"):
