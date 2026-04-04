@@ -1,16 +1,11 @@
-[server]
-enableCORS = true
-enableXsrfProtection = true
-headless = true
-port = 8501
-address = "0.0.0.0"
-
-[browser]
-gatherUsageStats = false
-
-[theme]
-base = "dark"
-primaryColor = "#1f77b4"
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#1e2329"
-textColor = "#fafafa"
+services:
+  - type: web
+    name: umnyj-yurist-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app
+    envVars:
+      - key: OCR_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
