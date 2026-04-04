@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>umnyj-yurist</title>
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    <style>
+        :root {
+            --bg-app: #0e1117;
+            --bg-card: #1e2329;
+            --bg-input: #2a2f36;
+            --text-primary: #fafafa;
+            --text-secondary: #a0a0a0;
+            --accent: #1f77b4;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #22c55e;
+            --border: #3a3f47;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+            background: var(--bg-app);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 16px;
+            padding-top: max(16px, env(safe-area-inset-top));
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 22px; margin-bottom: 4px; }
+        .header p { font-size: 13px; color: var(--text-secondary); }
+        
+        .section { background: var(--bg-card); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+        
+        .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        select {
+            width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text-primary); font-size: 14px;
+        }
+        
+        .tabs { display: flex; gap: 4px; background: var(--bg-input); padding: 4px; border-radius: 10px; margin-bottom: 16px; }
+        .tab {
+            flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 500;
+            border-radius: 8px; cursor: pointer; transition: all 0.2s;
+        }
+        .tab.active { background: var(--accent); color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .upload {
+            border: 2px dashed var(--border); border-radius: 10px; padding: 24px;
+            text-align: center; cursor: pointer; transition: border-color 0.2s;
+        }
+        .upload:hover { border-color: var(--accent); }
+        #fileInput { display: none; }
+        
+        textarea {
+            width: 100%; min-height: 150px; padding: 12px; background: var(--bg-input);
+            border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);
+            font-size: 14px; font-family: inherit; resize: vertical; margin: 10px 0;
+        }
+        
+        .btn {
+            width: 100%; padding: 14px; background: var(--accent); color: white;
+            border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+            cursor: pointer; margin-top: 10px;
+        }
+        .btn:disabled { background: var(--border); cursor: not-allowed; }
+        .btn-secondary { background: var(--bg-input); color: var(--text-primary); }
+        
+        .result {
+            background: var(--bg-input); border-radius: 10px; padding: 16px;
+            margin-top: 16px; font-size: 14px; white-space: pre-wrap; line-height: 1.5;
+        }
+        
+        .loading { text-align: center; padding: 20px; color: var(--text-secondary); display: none; }
+        .spinner {
+            width: 24px; height: 24px; border: 3px solid var(--border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .risk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+        .risk-card {
+            background: var(--bg-input); border-radius: 8px; padding: 10px; text-align: center;
+            border: 2px solid var(--border);
+        }
+        .risk-card.critical { border-color: var(--danger); }
+        .risk-card.medium { border-color: var(--warning); }
+        .risk-card.low { border-color: var(--success); }
+        .risk-card.verdict { border-color: var(--accent); background: #1e3a5f; }
+        .risk-num { font-size: 20px; font-weight: 700; display: block; }
+        .risk-num.critical { color: var(--danger); }
+        .risk-num.medium { color: var(--warning); }
+        .risk-num.low { color: var(--success); }
+        .risk-label { font-size: 11px; color: var(--text-secondary); }
+        
+        .file-info { background: var(--bg-input); padding: 8px 12px; border-radius: 6px; margin: 8px 0; font-size: 13px; }
+        
+        @media (max-width: 600px) { .risk-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚖️ umnyj-yurist</h1>
+            <p>AI-анализ договоров</p>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Настройки</div>
+            <div class="settings">
+                <select id="jurisdiction" onchange="saveState()">
+                    <option value="RU">🇷🇺 Россия</option>
+                    <option value="BY">🇧🇾 Беларусь</option>
+                </select>
+                <select id="contractType">
+                    <option>Договор аренды</option>
+                    <option>Купли-продажи</option>
+                    <option>Услуг</option>
+                    <option>Подряда</option>
+                    <option>Трудовой</option>
+                    <option>Поставки</option>
+                    <option>Займа</option>
+                    <option selected>Другое</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('photo')">📸 Фото</div>
+            <div class="tab" onclick="switchTab('text')">📝 Текст</div>
+            <div class="tab" onclick="switchTab('question')">❓ Вопрос</div>
+        </div>
+        
+        <!-- Фото -->
+        <div id="tab-photo" class="tab-content active">
+            <div class="section">
+                <div class="section-title">Загрузить документ</div>
+                <div class="upload" onclick="document.getElementById('fileInput').click()">
+                    📎 Нажмите, чтобы выбрать фото
+                </div>
+                <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files[0])">
+                <div id="fileInfo"></div>
+                <button class="btn" id="btnOcr" onclick="startOcr()" disabled>🔍 Распознать текст</button>
+            </div>
+        </div>
+        
+        <!-- Текст -->
+        <div id="tab-text" class="tab-content">
+            <div class="section">
+                <div class="section-title">Введите текст договора</div>
+                <textarea id="manualText" placeholder="Вставьте текст договора..."></textarea>
+                <button class="btn" id="btnAnalyzeManual" onclick="analyzeManual()" disabled>⚖️ Анализировать</button>
+            </div>
+        </div>
+        
+        <!-- Вопрос -->
+        <div id="tab-question" class="tab-content">
+            <div class="section">
+                <div class="section-title">Задайте вопрос юристу</div>
+                <textarea id="questionText" placeholder="Ваш юридический вопрос..." style="min-height:100px"></textarea>
+                <button class="btn" id="btnAsk" onclick="askQuestion()" disabled>💬 Получить ответ</button>
+            </div>
+        </div>
+        
+        <!-- Загрузка -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div id="loadingText">Обработка...</div>
+        </div>
+        
+        <!-- Результат -->
+        <div id="result" style="display:none">
+            <div class="section">
+                <div class="section-title">📊 Карта рисков</div>
+                <div class="risk-grid">
+                    <div class="risk-card critical">
+                        <span class="risk-num critical" id="rCrit">0</span>
+                        <span class="risk-label">Критич.</span>
+                    </div>
+                    <div class="risk-card medium">
+                        <span class="risk-num medium" id="rMed">0</span>
+                        <span class="risk-label">Средн.</span>
+                    </div>
+                    <div class="risk-card low">
+                        <span class="risk-num low" id="rLow">0</span>
+                        <span class="risk-label">ОК</span>
+                    </div>
+                    <div class="risk-card verdict">
+                        <span class="risk-num" id="rVerdict">—</span>
+                        <span class="risk-label">Вердикт</span>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">📋 Анализ</div>
+                <div class="result" id="fullResult"></div>
+                <button class="btn btn-secondary" onclick="downloadReport()" style="margin-top:12px">📥 Скачать</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ ЗАМЕНИ НА СВОЙ СЕРВЕР!
+        const API_URL = 'https://umnyj-yurist-api.onrender.com';
+        
+        // VK Bridge
+        if (window.vkBridge) {
+            vkBridge.send('VKWebAppInit')
+                .then(() => console.log('✅ VK Bridge OK'))
+                .catch(err => console.log('❌ VK Bridge:', err));
+        }
+        
+        // State
+        let selectedFile = null;
+        let currentResult = null;
+        
+        // Load state
+        window.onload = () => {
+            const saved = localStorage.getItem('umnyj-state');
+            if (saved) {
+                const s = JSON.parse(saved);
+                if (s.jur) document.getElementById('jurisdiction').value = s.jur;
+            }
+            checkButtons();
+        };
+        
+        function saveState() {
+            localStorage.setItem('umnyj-state', JSON.stringify({
+                jur: document.getElementById('jurisdiction').value
+            }));
+        }
+        
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+            if (window.vkBridge) vkBridge.send('VKWebAppTapticImpactOccurred', {style:'light'});
+        }
+        
+        function handleFile(file) {
+            if (!file) return;
+            selectedFile = file;
+            const size = (file.size / 1024).toFixed(1);
+            document.getElementById('fileInfo').innerHTML = `<div class="file-info">📄 ${file.name} (${size} KB)</div>`;
+            document.getElementById('btnOcr').disabled = false;
+            if (window.vkBridge) vkBridge.send('VKWebAppTapticImpactOccurred', {style:'light'});
+        }
+        
+        function setLoading(show, text) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('loadingText').textContent = text;
+        }
+        
+        function checkButtons() {
+            const manual = document.getElementById('manualText').value;
+            const question = document.getElementById('questionText').value;
+            document.getElementById('btnAnalyzeManual').disabled = manual.length < 50;
+            document.getElementById('btnAsk').disabled = question.length < 5;
+        }
+        
+        document.getElementById('manualText').addEventListener('input', checkButtons);
+        document.getElementById('questionText').addEventListener('input', checkButtons);
+        
+        async function startOcr() {
+            if (!selectedFile) return;
+            setLoading(true, 'Распознавание...');
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                
+                const resp = await fetch(`${API_URL}/api/ocr`, { method: 'POST', body: formData });
+                const data = await resp.json();
+                
+                if (data.error) throw new Error(data.error);
+                
+                document.getElementById('manualText').value = data.text;
+                switchTab('text');
+                document.querySelector('.tab:nth-child(2)').classList.add('active');
+                setLoading(false);
+                if (window.vkBridge) vkBridge.send('VKWebAppTapticNotificationOccurred', {type:'success'});
+                
+            } catch (err) {
+                setLoading(false);
+                alert('⚠️ ' + err.message);
+            }
+        }
+        
+        async function analyzeManual() {
+            const text = document.getElementById('manualText').value;
+            const jurisdiction = document.getElementById('jurisdiction').value;
+            const contractType = document.getElementById('contractType').value;
+            
+            setLoading(true, 'Анализ договора...');
+            
+            try {
+                const resp = await fetch(`${API_URL}/api/analyze`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text, jurisdiction, contract_type: contractType})
+                });
+                
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                
+                currentResult = data.result;
+                const rs = data.risk_summary;
+                
+                document.getElementById('fullResult').textContent = data.result;
+                document.getElementById('rCrit').textContent = rs.critical;
+                document.getElementById('rMed').textContent = rs.medium;
+                document.getElementById('rLow').textContent = rs.low;
+                document.getElementById('rVerdict').textContent = rs.verdict;
+                
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+                
+                if (window.vkBridge) vkBridge.send('VKWebAppTapticNotificationOccurred', {type:'success'});
+                
+            } catch (err) {
+                alert('⚠️ ' + err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        async function askQuestion() {
+            const question = document.getElementById('questionText').value;
+            const jurisdiction = document.getElementById('jurisdiction').value;
+            
+            setLoading(true, 'Поиск ответа...');
+            
+            try {
+                const resp = await fetch(`${API_URL}/api/ask`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question, jurisdiction})
+                });
+                
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                
+                alert('Ответ:\n\n' + data.answer);
+                
+            } catch (err) {
+                alert('⚠️ ' + err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        function downloadReport() {
+            if (!currentResult) return;
+            const blob = new Blob([currentResult], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'legal_analysis_' + new Date().toISOString().slice(0,10) + '.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
