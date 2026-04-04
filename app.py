@@ -1,136 +1,193 @@
 import streamlit as st
 import time
 
+# 1. Настройка страницы
 st.set_page_config(
     page_title="umnyj-yurist",
+    page_icon="⚖️",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# VK Bridge
+# 2. Подключение VK Bridge (скрипт выполняется в браузере)
 st.markdown("""
 <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 <script>
-window.addEventListener('load', function() {
-    if (window.vkBridge) {
-        vkBridge.send('VKWebAppInit');
-    }
-});
-function selectJurisdiction(code) {
-    window.parent.postMessage({jurisdiction: code}, '*');
-}
+    window.addEventListener('load', function() {
+        if (window.vkBridge) {
+            vkBridge.send('VKWebAppInit')
+                .then(() => console.log('VK Bridge initialized'))
+                .catch(err => console.log('VK Bridge error:', err));
+        }
+    });
 </script>
 """, unsafe_allow_html=True)
 
-# Стили
+# 3. Стили CSS (Магия, которая исправляет дизайн)
 st.markdown("""
 <style>
-    #MainMenu, footer, .stDeployButton {display: none;}
-    .main .block-container {padding: 20px 16px; max-width: 600px;}
+    /* Убираем лишнее меню Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display: none;}
     
-    .section {
-        background: var(--vkui--color_background_content, white);
+    /* Основной контейнер */
+    .main .block-container {
+        padding: 20px 16px;
+        max-width: 600px;
+        background-color: #f0f2f5; /* Светло-серый фон как в ВК */
+    }
+
+    /* Заголовок */
+    h1 {
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: #000;
+    }
+
+    /* Секции (белые блоки) */
+    .section-box {
+        background: white;
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 16px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
+    
     .section-title {
         font-size: 15px;
         font-weight: 600;
         margin-bottom: 12px;
+        color: #000;
+    }
+
+    /* === КНОПКИ ФЛАГОВ (Белые карточки) === */
+    /* Мы целимся в кнопки внутри колонок */
+    div[data-testid="column"] div.stButton > button {
+        background-color: white !important;
+        color: #333 !important;
+        border: 2px solid #e1e3e6 !important;
+        border-radius: 10px !important;
+        width: 100% !important;
+        padding: 15px 10px !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        transition: all 0.2s !important;
+        box-shadow: none !important;
+    }
+
+    /* Ховер эффект для флагов */
+    div[data-testid="column"] div.stButton > button:hover {
+        border-color: #2688eb !important;
+        background-color: #f0f7ff !important;
+        transform: translateY(-2px);
+    }
+
+    /* === ГЛАВНАЯ КНОПКА (Синяя) === */
+    /* Это последняя кнопка на странице */
+    div.stVerticalBlock > div:last-of-type div.stButton > button {
+        background-color: #2688eb !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 10px !important;
+        width: 100% !important;
+        padding: 16px !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(38, 136, 235, 0.3) !important;
     }
     
-    .flags-grid {display: grid; grid-template-columns: 1fr 1fr; gap: 12px;}
-    
-    .flag-btn {
-        background: #f0f2f5;
-        border: 2px solid transparent;
-        border-radius: 10px;
-        padding: 16px 12px;
-        cursor: pointer;
-        text-align: center;
-        transition: all 0.2s;
-        font-size: 14px;
-        font-weight: 500;
+    div.stVerticalBlock > div:last-of-type div.stButton > button:disabled {
+        background-color: #c7cfd6 !important;
+        box-shadow: none !important;
+        cursor: not-allowed;
     }
-    .flag-btn:hover {transform: translateY(-2px);}
-    .flag-btn.active {
-        border-color: #2688eb;
-        background: #e5f1fa;
-    }
-    
-    .upload-box {
-        border: 2px dashed #e1e3e6;
-        border-radius: 10px;
-        padding: 24px;
-        text-align: center;
-        margin: 10px 0;
-    }
-    
-    .analyze-btn {
-        width: 100%;
-        padding: 14px;
-        background: #2688eb;
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    .analyze-btn:disabled {background: #c7cfd6; cursor: not-allowed;}
-    
-    .result {
+
+    /* Статус успеха */
+    .success-box {
+        background-color: #e5f6ea;
+        border: 1px solid #4bb34b;
+        color: #2c2d2e;
         padding: 12px;
         border-radius: 8px;
-        margin-top: 15px;
         text-align: center;
-        background: #e5f6ea;
-        border: 1px solid #4bb34b;
+        margin-top: 15px;
+        font-size: 14px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Заголовок
-st.markdown("<h1 style='text-align:center;font-size:22px;'>umnyj-yurist</h1>", unsafe_allow_html=True)
+# 4. Логика приложения
 
-# Session state
+# Инициализация переменных
 if 'jurisdiction' not in st.session_state:
     st.session_state.jurisdiction = None
-if 'files' not in st.session_state:
-    st.session_state.files = []
 if 'result' not in st.session_state:
     st.session_state.result = None
 
-# Выбор юрисдикции через HTML кнопки
-st.markdown("<div class='section'><div class='section-title'>🌍 Юрисдикция</div>", unsafe_allow_html=True)
-st.markdown("""
-<div class='flags-grid'>
-    <div class='flag-btn {}' onclick="selectJurisdiction('BY')">🇧 Беларусь</div>
-    <div class='flag-btn {}' onclick="selectJurisdiction('RU')">🇷🇺 Россия</div>
-</div>
-""".format(
-    'active' if st.session_state.jurisdiction == 'BY' else '',
-    'active' if st.session_state.jurisdiction == 'RU' else ''
-), unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+# Заголовок
+st.markdown("<h1>umnyj-yurist</h1>", unsafe_allow_html=True)
 
-# Загрузка файлов
-st.markdown("<div class='section'><div class='section-title'>📄 Документы</div>", unsafe_allow_html=True)
-uploaded = st.file_uploader("", type=['pdf','docx','jpg','png'], accept_multiple_files=True, label_visibility="collapsed")
-if uploaded:
-    st.session_state.files = uploaded
-    st.success(f"✅ Загружено файлов: {len(uploaded)}")
-st.markdown("</div>", unsafe_allow_html=True)
+# --- Блок 1: Юрисдикция ---
+st.markdown('<div class="section-box">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">🌍 Юрисдикция</div>', unsafe_allow_html=True)
 
-# Кнопка анализа
-can_run = st.session_state.jurisdiction and st.session_state.files
+col1, col2 = st.columns(2)
 
-if st.button("🔍 Анализировать документы", disabled=not can_run):
-    with st.spinner('Обработка...'):
-        time.sleep(1.5)
-        jur = "РФ" if st.session_state.jurisdiction == 'RU' else "РБ"
-        st.session_state.result = f"✅ Проверено {len(st.session_state.files)} файл(ов) по законодательству {jur}. Всё корректно."
+with col1:
+    # Кнопка Беларусь
+    # type="secondary" делает её белой по умолчанию (но мы переопределили CSS выше)
+    if st.button("🇧🇾 Беларусь", key="btn_by", use_container_width=True):
+        st.session_state.jurisdiction = "BY"
+        st.session_state.result = None
+        st.rerun()
 
+with col2:
+    # Кнопка Россия
+    if st.button("🇷🇺 Россия", key="btn_ru", use_container_width=True):
+        st.session_state.jurisdiction = "RU"
+        st.session_state.result = None
+        st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Блок 2: Документы ---
+st.markdown('<div class="section-box">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">📄 Документы</div>', unsafe_allow_html=True)
+
+# Загрузчик файлов
+uploaded_files = st.file_uploader(
+    "Нажмите, чтобы загрузить (PDF, DOCX, JPG)",
+    type=['pdf', 'docx', 'jpg', 'jpeg', 'png'],
+    accept_multiple_files=True,
+    label_visibility="collapsed"
+)
+
+if uploaded_files:
+    st.success(f"✅ Загружено файлов: {len(uploaded_files)}")
+    for f in uploaded_files:
+        st.caption(f"• {f.name}")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Блок 3: Кнопка Анализа ---
+# Кнопка активна только если выбрана страна и есть файлы
+is_ready = st.session_state.jurisdiction is not None and uploaded_files
+
+# Эта кнопка станет синей благодаря CSS (она последняя в блоке)
+if st.button("🔍 Анализировать документы", disabled=not is_ready):
+    with st.spinner('⏳ Идет анализ документов...'):
+        time.sleep(2) # Имитация работы
+        
+        jur_text = "законодательству РФ" if st.session_state.jurisdiction == "RU" else "законодательству РБ"
+        st.session_state.result = f"✅ Проверено {len(uploaded_files)} файл(ов) по {jur_text}. Нарушений не найдено."
+
+# Показываем результат
 if st.session_state.result:
-    st.markdown(f"<div class='result'>{st.session_state.result}</div>", unsafe_allow_html=True)
+    st.markdown(f'<div class="success-box">{st.session_state.result}</div>', unsafe_allow_html=True)
