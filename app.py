@@ -1,211 +1,216 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import streamlit as st
 import requests
 import re
 import os
-
-app = Flask(__name__)
-CORS(app)  # Разрешаем запросы с любого источника
+from PIL import Image
+import io
 
 # ================= CONFIG =================
-OCR_API_KEY = os.getenv('OCR_API_KEY', 'helloworld')
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
-OPENROUTER_MODEL = 'deepseek/deepseek-chat'
+OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-# ================= OCR =================
-def ocr_space(file_bytes, filename='image.jpg'):
-    """Отправка изображения в OCR.space"""
-    files = {'file': (filename, file_bytes, 'image/jpeg')}
-    data = {
-        'apikey': OCR_API_KEY,
-        'language': 'rus',
-        'isOverlayRequired': 'false',
-        'detectOrientation': 'true',
-        'OCREngine': '2'
+# ================= SESSION STATE =================
+if 'contract_txt' not in st.session_state:
+    st.session_state.contract_txt = ""
+if 'result' not in st.session_state:
+    st.session_state.result = None
+if 'jurisdiction' not in st.session_state:
+    st.session_state.jurisdiction = "RU"
+if 'contract_type' not in st.session_state:
+    st.session_state.contract_type = "Другое"
+if 'risk_summary' not in st.session_state:
+    st.session_state.risk_summary = None
+
+# ================= VK BRIDGE =================
+st.markdown("""
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+<script>
+if (window.vkBridge) {
+    vkBridge.send('VKWebAppInit').catch(()=>{});
+}
+</script>
+""", unsafe_allow_html=True)
+
+# ================= CSS =================
+st.markdown("""
+<style>
+    #MainMenu, footer, .stDeployButton {visibility: hidden;}
+    .stApp { background: #0e1117; color: #fafafa; }
+    .stTextArea textarea { background: #1e2329 !important; color: #fff !important; }
+    .stButton>button { 
+        background: #1f77b4 !important; color: white !important; 
+        border: none !important; border-radius: 8px !important; 
+        height: 50px !important; font-weight: bold !important; width: 100% !important;
     }
-    
-    response = requests.post('https://api.ocr.space/parse/image', files=files, data=data, timeout=60)
-    result = response.json()
-    
-    if result.get('IsErroredOnProcessing'):
-        return None, result.get('ErrorMessage', ['Unknown error'])[0]
-    
-    text = result.get('ParsedResults', [{}])[0].get('ParsedText', '')
-    return text.strip() if text else None, None
+    .risk-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; }
+    .risk-card { background: #1e2329; border-radius: 10px; padding: 12px; text-align: center; border: 2px solid #3a3f47; }
+    .risk-card.critical { border-color: #ef4444; }
+    .risk-card.medium { border-color: #f59e0b; }
+    .risk-card.low { border-color: #22c55e; }
+    .risk-card.verdict { border-color: #1f77b4; background: #1e3a5f; }
+    .risk-num { font-size: 22px; font-weight: bold; display: block; }
+    .risk-num.critical { color: #ef4444; }
+    .risk-num.medium { color: #f59e0b; }
+    .risk-num.low { color: #22c55e; }
+    .risk-label { font-size: 11px; color: #a0a0a0; }
+    .result-box { background: #1e2329; border-radius: 10px; padding: 16px; margin-top: 15px; white-space: pre-wrap; font-size: 14px; }
+</style>
+""", unsafe_allow_html=True)
 
-# ================= TEXT CORRECTION =================
+# ================= FUNCTIONS =================
+def compress_image(file_bytes, max_size_kb=500):
+    try:
+        img = Image.open(io.BytesIO(file_bytes))
+        if img.mode in ('RGBA', 'P', 'LA'):
+            bg = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P': img = img.convert('RGBA')
+            bg.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = bg
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        w, h = img.size
+        if max(w, h) > 1600:
+            scale = 1600 / max(w, h)
+            img = img.resize((int(w*scale), int(h*scale)), Image.Resampling.LANCZOS)
+        quality = 85
+        for _ in range(10):
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=quality, optimize=True)
+            if buf.tell() <= max_size_kb * 1024:
+                return buf.getvalue()
+            quality -= 5
+        return buf.getvalue()
+    except:
+        return file_bytes
+
+def ocr_space(file_bytes, filename="img.jpg"):
+    try:
+        compressed = compress_image(file_bytes)
+        files = {'file': (filename, io.BytesIO(compressed), 'image/jpeg')}
+        data = {'apikey': OCR_API_KEY, 'language': 'rus', 'isOverlayRequired': 'false', 'detectOrientation': 'true', 'OCREngine': '2'}
+        resp = requests.post('https://api.ocr.space/parse/image', files=files, data=data, timeout=60)
+        result = resp.json()
+        if result.get('IsErroredOnProcessing'):
+            return None, result.get('ErrorMessage', ['Error'])[0]
+        text = result.get('ParsedResults', [{}])[0].get('ParsedText', '')
+        return text.strip() if text else None, None
+    except Exception as e:
+        return None, str(e)
+
 def correct_text(text, jurisdiction):
-    """Исправление опечаток через AI"""
     if not OPENROUTER_API_KEY or len(text) < 50:
         return text
-    
     jur_name = 'Российская Федерация' if jurisdiction == 'RU' else 'Республика Беларусь'
-    
     try:
-        response = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://umnyj-yurist.ru'
-            },
-            json={
-                'model': OPENROUTER_MODEL,
-                'messages': [
-                    {'role': 'system', 'content': f'Ты редактор юридических документов ({jur_name}). Исправь опечатки.'},
-                    {'role': 'user', 'content': f'Исправь текст:\n\n{text}'}
-                ],
-                'temperature': 0.1,
-                'max_tokens': 3000
-            },
-            timeout=120
-        )
-        if response.status_code == 200:
-            return response.json()['choices'][0]['message']['content'].strip()
-    except:
-        pass
+        resp = requests.post('https://openrouter.ai/api/v1/chat/completions',
+            headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json'},
+            json={'model': 'deepseek/deepseek-chat', 'messages': [
+                {'role': 'system', 'content': f'Редактор юр. документов ({jur_name}). Исправь опечатки.'},
+                {'role': 'user', 'content': f'Исправь:\n\n{text}'}
+            ], 'temperature': 0.1, 'max_tokens': 3000}, timeout=120)
+        if resp.status_code == 200:
+            return resp.json()['choices'][0]['message']['content'].strip()
+    except: pass
     return text
 
-# ================= AI ANALYSIS =================
 def analyze_contract(text, jurisdiction, contract_type):
-    """Анализ договора через AI"""
     if not OPENROUTER_API_KEY:
         return None, "API ключ не настроен"
-    
     jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
-    
-    system_prompt = f"""Ты — юрист-эксперт по праву {jur_base}. Тип договора: {contract_type}.
-Проанализируй договор и верни ответ в формате:
-1. 🔴 Критические риски (с пояснением)
-2. 🟡 Средние риски
-3. 🟢 Что составлено грамотно
-4. 💡 Рекомендации по изменению
-5. ✅ Итоговый вердикт: Безопасно / Требует правок / Опасно"""
+    prompt = f"""Ты юрист по праву {jur_base}. Договор: {contract_type}.
+Проанализируй:
+1. 🔴 Критические риски
+2. 🟡 Средние риски  
+3. 🟢 Что хорошо
+4. 💡 Рекомендации
+5. ✅ Вердикт
 
+Текст:
+{text}"""
     try:
-        response = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://umnyj-yurist.ru'
-            },
-            json={
-                'model': OPENROUTER_MODEL,
-                'messages': [
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': f'Текст договора:\n\n{text}'}
-                ],
-                'temperature': 0.2,
-                'max_tokens': 3000
-            },
-            timeout=120
-        )
-        if response.status_code == 200:
-            result = response.json()['choices'][0]['message']['content'].strip()
-            return result, None
+        resp = requests.post('https://openrouter.ai/api/v1/chat/completions',
+            headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json'},
+            json={'model': 'deepseek/deepseek-chat', 'messages': [
+                {'role': 'system', 'content': prompt},
+                {'role': 'user', 'content': text}
+            ], 'temperature': 0.2, 'max_tokens': 3000}, timeout=120)
+        if resp.status_code == 200:
+            return resp.json()['choices'][0]['message']['content'].strip(), None
         return None, "Ошибка сервиса"
     except Exception as e:
-        return None, f"Ошибка: {str(e)}"
+        return None, str(e)
 
-# ================= API ENDPOINTS =================
-
-@app.route('/api/ocr', methods=['POST'])
-def api_ocr():
-    """Эндпоинт для OCR"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'Empty filename'}), 400
-    
-    file_bytes = file.read()
-    text, error = ocr_space(file_bytes, file.filename)
-    
-    if error:
-        return jsonify({'error': error}), 400
-    
-    return jsonify({'text': text})
-
-@app.route('/api/correct', methods=['POST'])
-def api_correct():
-    """Эндпоинт для коррекции текста"""
-    data = request.json
-    text = data.get('text', '')
-    jurisdiction = data.get('jurisdiction', 'RU')
-    
-    corrected = correct_text(text, jurisdiction)
-    return jsonify({'text': corrected})
-
-@app.route('/api/analyze', methods=['POST'])
-def api_analyze():
-    """Эндпоинт для анализа договора"""
-    data = request.json
-    text = data.get('text', '')
-    jurisdiction = data.get('jurisdiction', 'RU')
-    contract_type = data.get('contract_type', 'Другое')
-    
-    if len(text) < 50:
-        return jsonify({'error': 'Текст слишком короткий'}), 400
-    
-    result, error = analyze_contract(text, jurisdiction, contract_type)
-    
-    if error:
-        return jsonify({'error': error}), 500
-    
-    # Подсчёт рисков для фронтенда
-    risk_summary = {
-        'critical': len(re.findall(r'🔴', result)),
-        'medium': len(re.findall(r'🟡', result)),
-        'low': len(re.findall(r'🟢', result)),
-        'verdict': 'Требует правок' if 'требует' in result.lower() else 'Нормально'
+def extract_risks(text):
+    return {
+        'critical': len(re.findall(r'🔴', text)),
+        'medium': len(re.findall(r'🟡', text)),
+        'low': len(re.findall(r'🟢', text)),
+        'verdict': 'Требует правок' if 'требует' in text.lower() else 'Опасно' if 'опасно' in text.lower() else 'Нормально'
     }
-    
-    return jsonify({'result': result, 'risk_summary': risk_summary})
 
-@app.route('/api/ask', methods=['POST'])
-def api_ask():
-    """Эндпоинт для юридических вопросов"""
-    data = request.json
-    question = data.get('question', '')
-    jurisdiction = data.get('jurisdiction', 'RU')
-    
-    if not OPENROUTER_API_KEY:
-        return jsonify({'error': 'API ключ не настроен'}), 500
-    
-    jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
-    
-    try:
-        response = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {OPENROUTER_API_KEY}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://umnyj-yurist.ru'
-            },
-            json={
-                'model': OPENROUTER_MODEL,
-                'messages': [
-                    {'role': 'system', 'content': f'Ты юрист ({jur_base}). Отвечай чётко, со ссылками на законы.'},
-                    {'role': 'user', 'content': question}
-                ],
-                'temperature': 0.2,
-                'max_tokens': 2000
-            },
-            timeout=90
-        )
-        if response.status_code == 200:
-            answer = response.json()['choices'][0]['message']['content'].strip()
-            return jsonify({'answer': answer})
-        return jsonify({'error': 'Ошибка сервиса'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# ================= UI =================
+st.title("⚖️ umnyj-yurist")
+st.caption("Анализ договоров")
 
-@app.route('/health')
-def health():
-    """Проверка работоспособности сервера"""
-    return jsonify({'status': 'ok'})
+# Настройки
+col_j, col_t = st.columns(2)
+with col_j:
+    st.session_state.jurisdiction = st.selectbox("Юрисдикция", ["🇷🇺 РФ", "🇧🇾 РБ"], label_visibility="collapsed")
+    st.session_state.jurisdiction = "RU" if "РФ" in st.session_state.jurisdiction else "BY"
+with col_t:
+    st.session_state.contract_type = st.selectbox("Тип договора", ["Договор аренды", "Купли-продажи", "Услуг", "Подряда", "Трудовой", "Поставки", "Займа", "Другое"], label_visibility="collapsed")
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+st.divider()
+
+# Вкладки
+tab1, tab2 = st.tabs(["📸 Фото", "📝 Текст"])
+
+with tab1:
+    uploaded = st.file_uploader("Загрузи фото", type=['jpg','jpeg','png'], label_visibility="collapsed")
+    if uploaded:
+        with st.spinner("🔍 Распознаю..."):
+            text, err = ocr_space(uploaded.read(), uploaded.name)
+            if err:
+                st.error(f"Ошибка: {err}")
+            elif text:
+                st.session_state.contract_txt = correct_text(text, st.session_state.jurisdiction)
+                st.success("✅ Готово!")
+    
+    if st.session_state.contract_txt:
+        st.session_state.contract_txt = st.text_area("Текст:", value=st.session_state.contract_txt, height=250, label_visibility="collapsed")
+        
+        if st.button("⚖️ Анализировать", disabled=len(st.session_state.contract_txt)<50):
+            with st.spinner("Анализирую..."):
+                result, err = analyze_contract(st.session_state.contract_txt, st.session_state.jurisdiction, st.session_state.contract_type)
+                if err:
+                    st.error(err)
+                else:
+                    st.session_state.result = result
+                    st.session_state.risk_summary = extract_risks(result)
+                    st.success("✅ Готово!")
+
+with tab2:
+    txt = st.text_area("Вставь текст", height=250, label_visibility="collapsed")
+    if st.button("Анализировать", disabled=len(txt)<50):
+        with st.spinner("Анализирую..."):
+            res, err = analyze_contract(txt, st.session_state.jurisdiction, st.session_state.contract_type)
+            if not err:
+                st.session_state.result = res
+                st.session_state.risk_summary = extract_risks(res)
+                st.rerun()
+
+# РЕЗУЛЬТАТ
+if st.session_state.result and st.session_state.risk_summary:
+    st.divider()
+    st.markdown("### 📊 Карта рисков")
+    rs = st.session_state.risk_summary
+    st.markdown(f"""
+    <div class="risk-cards">
+        <div class="risk-card critical"><span class="risk-num critical">{rs['critical']}</span><span class="risk-label">Критич.</span></div>
+        <div class="risk-card medium"><span class="risk-num medium">{rs['medium']}</span><span class="risk-label">Средн.</span></div>
+        <div class="risk-card low"><span class="risk-num low">{rs['low']}</span><span class="risk-label">ОК</span></div>
+        <div class="risk-card verdict"><span class="risk-num">{rs['verdict']}</span><span class="risk-label">Вердикт</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("### 📋 Анализ")
+    st.markdown(f"<div class='result-box'>{st.session_state.result}</div>", unsafe_allow_html=True)
