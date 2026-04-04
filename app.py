@@ -1,17 +1,72 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import streamlit as st
 import requests
 import re
 import os
 from PIL import Image
 import io
 
-app = Flask(__name__)
-CORS(app)
+# =============================================================================
+# 🔑 НАСТРОЙКИ API
+# =============================================================================
+# Ключи берутся из Secrets Streamlit Cloud или переменных окружения
+OCR_API_KEY = st.secrets.get("OCR_API_KEY", os.getenv("OCR_API_KEY", "helloworld"))
+OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+MODEL_NAME = "deepseek/deepseek-chat"
 
-OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+# =============================================================================
+# 💾 СОСТОЯНИЕ ПРИЛОЖЕНИЯ
+# =============================================================================
+if 'contract_txt' not in st.session_state: st.session_state.contract_txt = ""
+if 'result' not in st.session_state: st.session_state.result = None
+if 'risk_summary' not in st.session_state: st.session_state.risk_summary = None
+if 'jurisdiction' not in st.session_state: st.session_state.jurisdiction = "RU"
+if 'contract_type' not in st.session_state: st.session_state.contract_type = "Другое"
+if 'question_answer' not in st.session_state: st.session_state.question_answer = None
 
+# =============================================================================
+# 🌉 VK BRIDGE & CSS
+# =============================================================================
+st.markdown("""
+<script src="https://unpkg.com/@vkontakte/vk-bridge@2.1.5/dist/browser.min.js"></script>
+<script>
+    if (window.vkBridge) {
+        vkBridge.send('VKWebAppInit').catch(()=>{});
+    }
+</script>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+    #MainMenu, footer, .stDeployButton {visibility: hidden;}
+    .stApp { background: #0e1117; color: #fafafa; }
+    .stTextArea textarea { background: #1e2329 !important; color: #fff !important; border: 1px solid #3a3f47 !important; border-radius: 8px !important; }
+    .stButton>button { 
+        background: #1f77b4 !important; color: white !important; 
+        border: none !important; border-radius: 8px !important; 
+        height: 48px !important; font-weight: 600 !important; width: 100% !important;
+    }
+    .stButton>button:disabled { background: #3a3f47 !important; color: #666 !important; cursor: not-allowed; }
+    .risk-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; }
+    .risk-card { background: #1e2329; border-radius: 10px; padding: 12px; text-align: center; border: 2px solid #3a3f47; }
+    .risk-card.critical { border-color: #ef4444; }
+    .risk-card.medium { border-color: #f59e0b; }
+    .risk-card.low { border-color: #22c55e; }
+    .risk-card.verdict { border-color: #1f77b4; background: #1e3a5f; }
+    .risk-num { font-size: 22px; font-weight: bold; display: block; }
+    .risk-num.critical { color: #ef4444; }
+    .risk-num.medium { color: #f59e0b; }
+    .risk-num.low { color: #22c55e; }
+    .risk-label { font-size: 11px; color: #a0a0a0; }
+    .result-box { background: #1e2329; border-radius: 10px; padding: 16px; margin-top: 15px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; border: 1px solid #3a3f47; }
+    .answer-box { background: #1e3a5f; border-radius: 10px; padding: 16px; margin-top: 15px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; border: 1px solid #1f77b4; }
+    .hint { color: #888; font-size: 13px; margin-bottom: 8px; }
+    @media (max-width: 600px) { .risk-cards { grid-template-columns: repeat(2, 1fr); } }
+</style>
+""", unsafe_allow_html=True)
+
+# =============================================================================
+# 🛠 ФУНКЦИИ
+# =============================================================================
 def compress_image(file_bytes, max_size_kb=500):
     try:
         img = Image.open(io.BytesIO(file_bytes))
@@ -34,93 +89,167 @@ def compress_image(file_bytes, max_size_kb=500):
         return buf.getvalue()
     except: return file_bytes
 
-@app.route('/api/ocr', methods=['POST'])
-def api_ocr():
+def call_openrouter(system_prompt, user_text, max_tokens=3000):
+    if not OPENROUTER_API_KEY: 
+        return None, "⚠️ Ключ OpenRouter не найден. Добавь его в Secrets Streamlit Cloud."
     try:
-        file = request.files['file']
-        compressed = compress_image(file.read())
-        files = {'file': ('image.jpg', io.BytesIO(compressed), 'image/jpeg')}
+        resp = requests.post('https://openrouter.ai/api/v1/chat/completions',
+            headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json', 'HTTP-Referer': 'https://context-pro.streamlit.app'},
+            json={'model': MODEL_NAME, 'messages': [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_text}
+            ], 'temperature': 0.2, 'max_tokens': max_tokens}, timeout=120)
+        if resp.status_code == 200:
+            return resp.json()['choices'][0]['message']['content'].strip(), None
+        return None, f"Ошибка API: {resp.status_code}"
+    except Exception as e: return None, str(e)
+
+def ocr_space(file_bytes, filename="img.jpg"):
+    try:
+        compressed = compress_image(file_bytes)
+        files = {'file': (filename, io.BytesIO(compressed), 'image/jpeg')}
         data = {'apikey': OCR_API_KEY, 'language': 'rus', 'isOverlayRequired': 'false', 'detectOrientation': 'true', 'OCREngine': '2'}
         resp = requests.post('https://api.ocr.space/parse/image', files=files, data=data, timeout=60)
         result = resp.json()
-        if result.get('IsErroredOnProcessing'):
-            return jsonify({'error': result.get('ErrorMessage', ['Error'])[0]}), 400
+        if result.get('IsErroredOnProcessing'): return None, result.get('ErrorMessage', ['Error'])[0]
         text = result.get('ParsedResults', [{}])[0].get('ParsedText', '')
-        return jsonify({'text': text.strip() if text else ''})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return text.strip() if text else None, None
+    except Exception as e: return None, str(e)
 
-@app.route('/api/analyze', methods=['POST'])
-def api_analyze():
-    try:
-        data = request.json
-        text = data.get('text', '')
-        jurisdiction = data.get('jurisdiction', 'RU')
-        contract_type = data.get('contract_type', 'Другое')
-        
-        if not OPENROUTER_API_KEY:
-            return jsonify({'error': 'API key not set'}), 500
-        
-        jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
-        prompt = f"""Ты юрист по праву {jur_base}. Договор: {contract_type}.
-Проанализируй:
+def correct_text(text, jurisdiction):
+    if len(text) < 50: return text
+    jur_name = 'Российская Федерация' if jurisdiction == 'RU' else 'Республика Беларусь'
+    sys_prompt = f"Ты редактор юридических документов ({jur_name}). Исправь опечатки и ошибки распознавания, сохрани юридический смысл."
+    res, err = call_openrouter(sys_prompt, f"Исправь текст:\n\n{text}", max_tokens=3000)
+    return res if not err else text
+
+def analyze_contract(text, jurisdiction, contract_type):
+    jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
+    sys_prompt = f"""Ты опытный юрист по праву {jur_base}. Специализация: {contract_type}.
+Проанализируй договор строго по структуре:
 1. 🔴 Критические риски
 2. 🟡 Средние риски
-3. 🟢 Что хорошо
-4. 💡 Рекомендации
-5. ✅ Вердикт
+3. 🟢 Что составлено грамотно
+4. 💡 Рекомендации по правкам
+5. ✅ Итоговый вердикт: Безопасно / Требует правок / Опасно
+Отвечай чётко, без воды."""
+    return call_openrouter(sys_prompt, text)
 
-Текст:
-{text}"""
-        
-        resp = requests.post('https://openrouter.ai/api/v1/chat/completions',
-            headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json'},
-            json={'model': 'deepseek/deepseek-chat', 'messages': [
-                {'role': 'system', 'content': prompt},
-                {'role': 'user', 'content': text}
-            ], 'temperature': 0.2, 'max_tokens': 3000}, timeout=120)
-        
-        if resp.status_code == 200:
-            result = resp.json()['choices'][0]['message']['content'].strip()
-            risk_summary = {
-                'critical': len(re.findall(r'🔴', result)),
-                'medium': len(re.findall(r'🟡', result)),
-                'low': len(re.findall(r'🟢', result)),
-                'verdict': 'Требует правок' if 'требует' in result.lower() else 'Опасно' if 'опасно' in result.lower() else 'Нормально'
-            }
-            return jsonify({'result': result, 'risk_summary': risk_summary})
-        return jsonify({'error': f'API error: {resp.status_code}'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def ask_question(question, jurisdiction):
+    jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
+    sys_prompt = f"Ты практикующий юрист ({jur_base}). Отвечай на вопросы граждан, ссылаясь на статьи законов. Формат: краткий ответ -> правовое обоснование -> рекомендация."
+    return call_openrouter(sys_prompt, question, max_tokens=2000)
 
-@app.route('/api/ask', methods=['POST'])
-def api_ask():
-    try:
-        data = request.json
-        question = data.get('question', '')
-        jurisdiction = data.get('jurisdiction', 'RU')
-        
-        if not OPENROUTER_API_KEY:
-            return jsonify({'error': 'API key not set'}), 500
-        
-        jur_base = 'РФ' if jurisdiction == 'RU' else 'РБ'
-        resp = requests.post('https://openrouter.ai/api/v1/chat/completions',
-            headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}', 'Content-Type': 'application/json'},
-            json={'model': 'deepseek/deepseek-chat', 'messages': [
-                {'role': 'system', 'content': f'Ты юрист ({jur_base}). Отвечай со ссылками на законы.'},
-                {'role': 'user', 'content': question}
-            ], 'temperature': 0.2, 'max_tokens': 2000}, timeout=90)
-        
-        if resp.status_code == 200:
-            answer = resp.json()['choices'][0]['message']['content'].strip()
-            return jsonify({'answer': answer})
-        return jsonify({'error': f'API error: {resp.status_code}'}), 500
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def extract_risks(text):
+    return {
+        'critical': len(re.findall(r'🔴', text)),
+        'medium': len(re.findall(r'🟡', text)),
+        'low': len(re.findall(r'🟢', text)),
+        'verdict': 'Требует правок' if 'требует' in text.lower() else 'Опасно' if 'опасно' in text.lower() else 'Нормально'
+    }
 
-@app.route('/health')
-def health():
-    return jsonify({'status': 'ok'})
+# =============================================================================
+# 🖥 ИНТЕРФЕЙС
+# =============================================================================
+st.title("⚖️ umnyj-yurist")
+st.caption("AI-анализ договоров и юридические консультации")
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# Настройки
+col_j, col_t = st.columns(2)
+with col_j:
+    st.session_state.jurisdiction = st.selectbox("🌍 Юрисдикция", ["🇷🇺 Россия (РФ)", "🇧🇾 Беларусь (РБ)"], index=0, label_visibility="collapsed")
+    st.session_state.jurisdiction = "RU" if "РФ" in st.session_state.jurisdiction else "BY"
+with col_t:
+    st.session_state.contract_type = st.selectbox("📄 Тип договора", ["Договор аренды", "Купли-продажи", "Услуг", "Подряда", "Трудовой", "Поставки", "Займа", "Другое"], index=7, label_visibility="collapsed")
+
+st.divider()
+
+# Вкладки
+tab_photo, tab_text, tab_question = st.tabs(["📸 Фото документа", "📝 Ввести текст", "❓ Юридический вопрос"])
+
+# === ВКЛАДКА 1: ФОТО ===
+with tab_photo:
+    st.markdown('<p class="hint">Загрузи фото или скан договора (JPG/PNG, до 5 МБ)</p>', unsafe_allow_html=True)
+    uploaded = st.file_uploader("", type=['jpg','jpeg','png'], label_visibility="collapsed")
+    if uploaded:
+        with st.spinner("🔍 Распознаю текст и исправляю ошибки..."):
+            raw_text, err = ocr_space(uploaded.read(), uploaded.name)
+            if err:
+                st.error(f"❌ OCR ошибка: {err}")
+            elif raw_text:
+                st.session_state.contract_txt = correct_text(raw_text, st.session_state.jurisdiction)
+                st.success("✅ Текст распознан и проверен!")
+    
+    if st.session_state.contract_txt:
+        st.session_state.contract_txt = st.text_area("Отредактируй текст при необходимости:", value=st.session_state.contract_txt, height=200, label_visibility="collapsed")
+        
+        if st.button("⚖️ Анализировать договор", disabled=len(st.session_state.contract_txt)<50):
+            with st.spinner("🧠 AI анализирует риски..."):
+                res, err = analyze_contract(st.session_state.contract_txt, st.session_state.jurisdiction, st.session_state.contract_type)
+                if err: st.error(err)
+                else:
+                    st.session_state.result = res
+                    st.session_state.risk_summary = extract_risks(res)
+                    st.success("✅ Анализ завершён!")
+
+# === ВКЛАДКА 2: ТЕКСТ ===
+with tab_text:
+    st.markdown('<p class="hint">Вставь текст договора вручную</p>', unsafe_allow_html=True)
+    txt = st.text_area("", height=200, label_visibility="collapsed")
+    if st.button("⚖️ Анализировать", disabled=len(txt)<50):
+        with st.spinner("🧠 AI анализирует..."):
+            res, err = analyze_contract(txt, st.session_state.jurisdiction, st.session_state.contract_type)
+            if err: st.error(err)
+            else:
+                st.session_state.result = res
+                st.session_state.risk_summary = extract_risks(res)
+                st.rerun()
+
+# === ВКЛАДКА 3: ВОПРОС ===
+with tab_question:
+    st.markdown('<p class="hint">Задай вопрос юристу (например: "Может ли работодатель удержать зарплату за штраф?")</p>', unsafe_allow_html=True)
+    q = st.text_area("", height=120, label_visibility="collapsed")
+    if st.button("💬 Получить ответ", disabled=len(q)<5):
+        with st.spinner("🔍 Ищу правовое обоснование..."):
+            ans, err = ask_question(q, st.session_state.jurisdiction)
+            if err: st.error(err)
+            else:
+                st.session_state.question_answer = ans
+                st.rerun()
+    if st.session_state.question_answer:
+        st.markdown("### 📜 Ответ юриста:")
+        st.markdown(f"<div class='answer-box'>{st.session_state.question_answer}</div>", unsafe_allow_html=True)
+        if st.button("🗑 Очистить ответ"):
+            st.session_state.question_answer = None
+            st.rerun()
+
+# =============================================================================
+# 📊 РЕЗУЛЬТАТЫ АНАЛИЗА
+# =============================================================================
+if st.session_state.result and st.session_state.risk_summary:
+    st.divider()
+    st.markdown("### 📊 Карта рисков")
+    rs = st.session_state.risk_summary
+    st.markdown(f"""
+    <div class="risk-cards">
+        <div class="risk-card critical"><span class="risk-num critical">{rs['critical']}</span><span class="risk-label">Критич.</span></div>
+        <div class="risk-card medium"><span class="risk-num medium">{rs['medium']}</span><span class="risk-label">Средн.</span></div>
+        <div class="risk-card low"><span class="risk-num low">{rs['low']}</span><span class="risk-label">В норме</span></div>
+        <div class="risk-card verdict"><span class="risk-num">{rs['verdict']}</span><span class="risk-label">Вердикт</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 📋 Полный разбор")
+    st.markdown(f"<div class='result-box'>{st.session_state.result}</div>", unsafe_allow_html=True)
+    
+    st.download_button("📥 Скачать отчёт (TXT)", data=st.session_state.result, file_name="legal_analysis.txt", mime="text/plain", use_container_width=True)
+    
+    if st.button("🔄 Новый анализ"):
+        st.session_state.contract_txt = ""
+        st.session_state.result = None
+        st.session_state.risk_summary = None
+        st.rerun()
+
+# Футер
+st.divider()
+st.markdown("<div style='text-align:center;color:#555;font-size:11px;margin-top:20px'>⚖️ umnyj-yurist • Данные не сохраняются • Не является публичной офертой</div>", unsafe_allow_html=True)
